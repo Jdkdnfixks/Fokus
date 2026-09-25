@@ -1,0 +1,36 @@
+[package]
+name = "fokus"
+version = "0.1.0"
+description = "Fokus – Lern-App mit Pomodoro-Timer, Kalender, Musik und Statistiken"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "fokus_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1", features = ["net", "io-util", "time", "macros"] }
+lofty = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+gethostname = "0.5"
+url = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

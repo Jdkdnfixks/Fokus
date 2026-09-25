@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Fokus",
+  "version": "0.1.0",
+  "identifier": "de.fokus.lernapp",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Fokus",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 300,
+        "minHeight": 120,
+        "center": true,
+        "visible": false,
+        "backgroundColor": "#F4F2EC"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Fokus",
+    "category": "Productivity",
+    "shortDescription": "Lern-App mit Pomodoro-Timer",
+    "longDescription": "Fokus – Pomodoro-Timer, Kalender, Aufgaben, Musik und Lernstatistiken für den Unialltag.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["German"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

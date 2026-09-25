@@ -1,0 +1,128 @@
+/*
+ * Farb- und Formsystem von Fokus.
+ * Ruhige, leicht warme Neutraltöne mit einer gedeckten Akzentfarbe.
+ * Keine reinen Schwarz-/Weißflächen, keine gesättigten Signalfarben.
+ */
+
+:root {
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-xs: 4px;
+  --radius-s: 7px;
+  --radius: 10px;
+  --radius-l: 16px;
+  --radius-xl: 22px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 160ms;
+
+  --sidebar-w: 216px;
+}
+
+/* ---------- Hell ---------- */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f1eb;
+  --surface: #faf9f5;
+  --surface-2: #efece5;
+  --surface-3: #e6e2d9;
+  --border: #e1dcd2;
+  --border-strong: #cfc8bb;
+
+  --text: #2c322e;
+  --text-2: #59605a;
+  --text-3: #8a8f88;
+
+  --focus: var(--accent);
+  --focus-soft: var(--accent-soft);
+  --break: #6688a4;
+  --break-soft: #dde5ec;
+  --long: #8a7fae;
+  --long-soft: #e5e1ee;
+
+  --danger: #a9625c;
+  --danger-soft: #f1dedb;
+  --warning: #9c8141;
+  --warning-soft: #f0e7d1;
+  --success: var(--accent);
+
+  --ring-track: #e4e0d6;
+  --shadow-1: 0 1px 2px rgba(44, 50, 46, 0.05), 0 1px 1px rgba(44, 50, 46, 0.03);
+  --shadow-2: 0 10px 30px rgba(44, 50, 46, 0.12), 0 2px 6px rgba(44, 50, 46, 0.06);
+  --backdrop: rgba(40, 44, 40, 0.28);
+
+  /* Akzent Salbei (Standard) */
+  --accent: #5d876d;
+  --accent-strong: #4b735a;
+  --accent-soft: #dce7df;
+  --accent-contrast: #fbfaf6;
+}
+
+[data-theme="light"][data-accent="see"] {
+  --accent: #5a7f9c;
+  --accent-strong: #486b86;
+  --accent-soft: #dbe4ec;
+}
+[data-theme="light"][data-accent="lavendel"] {
+  --accent: #7d74a3;
+  --accent-strong: #675e8c;
+  --accent-soft: #e3e0ed;
+}
+[data-theme="light"][data-accent="sand"] {
+  --accent: #9a7d55;
+  --accent-strong: #816845;
+  --accent-soft: #eee5d7;
+}
+
+/* ---------- Dunkel ---------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #191e1c;
+  --surface: #202624;
+  --surface-2: #272e2b;
+  --surface-3: #2f3733;
+  --border: #323b37;
+  --border-strong: #414b46;
+
+  --text: #e2e6e0;
+  --text-2: #a7aea8;
+  --text-3: #79817b;
+
+  --break: #88a7c0;
+  --break-soft: #253039;
+  --long: #a69cc6;
+  --long-soft: #2c2a37;
+
+  --danger: #d0877f;
+  --danger-soft: #3a2927;
+  --warning: #cdb178;
+  --warning-soft: #36301f;
+
+  --ring-track: #2c3431;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-2: 0 12px 34px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --backdrop: rgba(8, 10, 9, 0.55);
+
+  --accent: #8cb199;
+  --accent-strong: #a4c5af;
+  --accent-soft: #2a3830;
+  --accent-contrast: #16201a;
+}
+
+[data-theme="dark"][data-accent="see"] {
+  --accent: #8aa9c2;
+  --accent-strong: #a3bdd2;
+  --accent-soft: #263240;
+}
+[data-theme="dark"][data-accent="lavendel"] {
+  --accent: #a89fc9;
+  --accent-strong: #bdb5da;
+  --accent-soft: #2f2c3d;
+}
+[data-theme="dark"][data-accent="sand"] {
+  --accent: #c7aa80;
+  --accent-strong: #d6bd98;
+  --accent-soft: #37301f;
+}
