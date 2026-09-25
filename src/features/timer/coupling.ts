@@ -30,6 +30,16 @@ export function startCoupling() {
     const pm = modeOf(prev);
     if (m !== pm) void onModeChange(m);
   });
+  // Blocker sofort an-/ausschalten, wenn er während einer Lernphase umgestellt wird
+  useData.subscribe((d, prev) => {
+    const b = d.data.settings.blocker;
+    const pb = prev.data.settings.blocker;
+    if (b === pb) return;
+    const m = modeOf(useTimer.getState());
+    const shouldBlock = b.enabled && (m.startsWith("focus") || (b.blockInBreaks && m.startsWith("break")));
+    if (shouldBlock) void applyBlock();
+    else if (pb.enabled) void clearBlock();
+  });
 }
 
 async function onModeChange(m: Mode) {

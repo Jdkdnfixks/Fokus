@@ -2,7 +2,13 @@
 
 Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musik und Lernstatistik an einem Ort. Gebaut für einen strukturierten Unialltag.
 
-![Fokus-Symbol](src-tauri/icons/128x128.png)
+![Timer-Ansicht](docs/timer.png)
+
+| Kalender | Statistik (dunkel) | Geräusche |
+|---|---|---|
+| ![Kalender](docs/kalender.png) | ![Statistik](docs/statistik.png) | ![Geräusche](docs/geraeusche.png) |
+
+*(Screenshots mit Beispieldaten)*
 
 ## Funktionen
 
