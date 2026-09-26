@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Coffee,
   FolderPlus,
   ListMusic,
   Music2,
@@ -21,7 +22,7 @@ import { uid } from "../../lib/ids";
 import { call, errorText, isTauri } from "../../lib/tauri";
 import { useData, useSettings } from "../../store/data";
 import type { ID, LocalTrack } from "../../store/types";
-import { chooseFocusSource, chooseLocalFocusMusic, ensureFocusMusicDefault } from "./focusMusic";
+import { chooseBreakSource, chooseFocusSource, chooseLocalBreakMusic, chooseLocalFocusMusic, ensureFocusMusicDefault } from "./focusMusic";
 import { applyLocalVolume, currentLocalTrack, playlistTrackIds, stopIfTrackRemoved, useLocalPlayer } from "./localPlayer";
 
 interface ImportedTrack {
@@ -91,6 +92,7 @@ export function LocalMusic() {
   const current = player.queue[player.index];
   const music = useSettings().music;
   const isFocusMusic = music.couple && music.focusSource === "local" && music.localPlaylistId === selected;
+  const isBreakMusic = music.couple && music.breakSource === "local" && music.breakLocalPlaylistId === selected;
 
   const playlist = playlists.find((p) => p.id === selected) ?? null;
   const ids = useMemo(() => (playlist ? playlistTrackIds(playlist.id) : tracks.map((t) => t.id)), [playlist, tracks]);
@@ -215,6 +217,15 @@ export function LocalMusic() {
                 <Timer size={15} /> {isFocusMusic ? "Lernmusik ✓" : "Als Lernmusik"}
               </button>
             )}
+            {list.length > 0 && (
+              <button
+                className={`btn ${isBreakMusic ? "soft" : ""}`}
+                onClick={() => (isBreakMusic ? chooseBreakSource("pause") : chooseLocalBreakMusic(selected))}
+                title={isBreakMusic ? "Läuft in den Pausen – klicken zum Ausschalten" : "In den Pausen abspielen"}
+              >
+                <Coffee size={15} /> {isBreakMusic ? "Pausenmusik ✓" : "Als Pausenmusik"}
+              </button>
+            )}
             <button className="btn" onClick={() => void addFiles()}>
               <FolderPlus size={15} /> Dateien hinzufügen
             </button>
@@ -226,12 +237,16 @@ export function LocalMusic() {
           </div>
         </div>
 
-        {isFocusMusic && (
+        {(isFocusMusic || isBreakMusic) && (
           <div className="banner info">
-            <Timer size={15} />
+            {isFocusMusic ? <Timer size={15} /> : <Coffee size={15} />}
             <span>
-              {playlist ? `„${playlist.name}“` : "Deine Musik"} startet automatisch mit jeder Lernphase und pausiert in den Pausen. Nach einer
-              Pause geht es an derselben Stelle weiter.
+              {playlist ? `„${playlist.name}“` : "Diese Titel"}{" "}
+              {isFocusMusic && isBreakMusic
+                ? "laufen in Lern- und Pausenphasen."
+                : isFocusMusic
+                  ? "starten automatisch mit jeder Lernphase. Nach einer Pause geht es an derselben Stelle weiter."
+                  : "laufen in deinen Pausen. Danach geht deine Lernmusik an der alten Stelle weiter."}
             </span>
           </div>
         )}

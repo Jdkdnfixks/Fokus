@@ -20,7 +20,7 @@ Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musi
 | **Aufgaben** | Aufgaben pro Modul mit Schätzung in Pomodoros, Fälligkeitsdatum; direkt im Timer auswählen und abhaken |
 | **Klausurplaner** | Kapitel und Aufwand eintragen → Fokus verteilt die Lernblöcke auf die freien Zeiten im Kalender bis zur Klausur; die letzten Tage bleiben für Wiederholung frei |
 | **Kalender** | Tages-, Wochen- und Monatsansicht, Termine per Maus anlegen und verschieben, Serientermine (z. B. Vorlesungen), Import und Abo von iCal-Kalendern (.ics), „Jetzt lernen“ direkt aus einem Lernblock |
-| **Musik** | Eigene MP3s mit Playlists, **Spotify-Steuerung** (Playlists auswählen, Play/Pause, Gerät wählen) und startet/pausiert automatisch mit dem Timer |
+| **Musik** | Eigene MP3s mit Playlists, **Spotify-Steuerung** (Playlists auswählen, Play/Pause, Gerät wählen); startet automatisch mit dem Timer, auf Wunsch mit eigener **Pausenmusik** |
 | **Geräusche** | Regen, Bach, Meer, Wind, Kaminfeuer, braunes/rosa/weißes Rauschen – frei mischbar, in der App erzeugt |
 | **Website-Blocker** | Sperrt ablenkende Seiten (YouTube, Instagram, …) während der Lernphasen in allen Browsern |
 | **Statistik** | Lerntage-Heatmap, Lernzeit pro Tag/Woche und Modul, Serien, Wochenziele, beste Tageszeit laut deinen Reflexionen, CSV-Export |
@@ -74,6 +74,9 @@ Voraussetzung: **Spotify Premium** (Spotify erlaubt die Fernsteuerung nur damit)
 
 ### Eigene Musik mit dem Timer
 Sobald du MP3s hinzufügst, spielt Fokus sie automatisch in jeder Lernphase ab und pausiert sie in den Pausen – danach geht es an derselben Stelle weiter (praktisch bei langen Lernmixen). Mit **„Als Lernmusik“** auf der Musikseite legst du fest, welche Playlist läuft; unter **Musik → Timer-Kopplung** stellst du Quelle und Verhalten ein.
+
+### Musik in den Pausen
+Unter **Musik → Timer-Kopplung → In Pausen** wählst du, was in der Pause passiert: Lernmusik **pausieren**, **weiterlaufen** lassen oder eine eigene **Pausenmusik** (eigene Playlist oder Spotify-Playlist). Schnell geht es auch über **„Als Pausenmusik“** auf der Musikseite bzw. das Tassen-Symbol bei einer Spotify-Playlist. Nach der Pause setzt Fokus deine Lernmusik genau an der unterbrochenen Stelle fort.
 
 Fokus steuert die Spotify-App auf deinem PC. Ist Spotify nicht geöffnet, startet Fokus die App beim ersten Abspielen.
 

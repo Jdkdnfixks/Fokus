@@ -66,7 +66,9 @@ export function defaultSettings(): Settings {
       sourceChosen: false,
       localPlaylistId: null,
       spotifyUri: null,
-      breakBehavior: "pause",
+      breakSource: "pause",
+      breakLocalPlaylistId: null,
+      breakSpotifyUri: null,
       fadeSeconds: 3,
       ambientInFocus: false,
       ambientInBreak: false,
@@ -128,6 +130,11 @@ export function normalizeData(raw: unknown): AppData {
   if (!isPlain(raw)) return base;
   const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
   const meta = isPlain(raw.meta) ? (raw.meta as AppData["meta"]) : base.meta;
+  // ältere Versionen: breakBehavior ("pause" | "continue") → breakSource
+  const storedMusic = isPlain(raw.settings) && isPlain(raw.settings.music) ? (raw.settings.music as Plain) : null;
+  if (storedMusic && storedMusic.breakSource === undefined && storedMusic.breakBehavior === "continue") {
+    storedMusic.breakSource = "continue";
+  }
   return {
     schema: 1,
     meta: { revision: Number(meta.revision) || 0, savedAt: String(meta.savedAt ?? ""), savedBy: String(meta.savedBy ?? "") },

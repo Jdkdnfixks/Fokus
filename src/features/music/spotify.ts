@@ -49,6 +49,7 @@ export interface SpotifyPlaylist {
 export interface SpotifyPlayback {
   isPlaying: boolean;
   track?: string;
+  trackUri?: string;
   artists?: string;
   image?: string;
   contextUri?: string | null;
@@ -326,6 +327,7 @@ interface PlayerApi {
   device: { id: string; name: string; volume_percent: number | null };
   item: {
     name: string;
+    uri?: string;
     duration_ms: number;
     artists?: { name: string }[];
     album?: { images?: { url: string }[] };
@@ -345,6 +347,7 @@ export async function refreshPlayback() {
       playback: {
         isPlaying: p.is_playing,
         track: p.item?.name,
+        trackUri: p.item?.uri,
         artists: p.item?.artists?.map((a) => a.name).join(", "),
         image: images[images.length - 1]?.url ?? images[0]?.url,
         contextUri: p.context?.uri ?? null,
@@ -400,13 +403,43 @@ async function afterCommand() {
   await refreshPlayback();
 }
 
+/** Gemerkter Spotify-Stand, um nach der Pause genau dort weiterzuspielen */
+export interface SpotifySnapshot {
+  contextUri: string | null;
+  trackUri: string;
+  positionMs: number;
+}
+
+/** Aktuellen Wiedergabestand abfragen und merken (null, wenn nichts läuft). */
+export async function spotifySnapshot(): Promise<SpotifySnapshot | null> {
+  await refreshPlayback();
+  const pb = useSpotify.getState().playback;
+  if (!pb?.trackUri) return null;
+  const elapsed = pb.isPlaying ? Date.now() - pb.fetchedAt : 0;
+  return { contextUri: pb.contextUri ?? null, trackUri: pb.trackUri, positionMs: pb.progressMs + elapsed };
+}
+
+/** Setzt einen gemerkten Stand fort (gleiche Playlist, gleicher Titel, gleiche Stelle). */
+export async function spotifyRestore(snap: SpotifySnapshot) {
+  await spotifyPlay(snap.contextUri, { offsetUri: snap.trackUri, positionMs: snap.positionMs });
+}
+
 /** Spielt eine Playlist (oder setzt die Wiedergabe fort, wenn `uri` fehlt). */
-export async function spotifyPlay(uri?: string | null) {
+export async function spotifyPlay(uri?: string | null, opts: { offsetUri?: string; positionMs?: number } = {}) {
   try {
     useSpotify.setState({ error: null });
     const device = await pickDevice();
     if (!device) throw new SpotifyError(404, "", "NO_ACTIVE_DEVICE");
-    const body = uri ? JSON.stringify({ context_uri: uri }) : undefined;
+    let body: string | undefined;
+    if (uri) {
+      body = JSON.stringify({
+        context_uri: uri,
+        ...(opts.offsetUri ? { offset: { uri: opts.offsetUri } } : {}),
+        ...(opts.positionMs ? { position_ms: Math.max(0, Math.round(opts.positionMs)) } : {}),
+      });
+    } else if (opts.offsetUri) {
+      body = JSON.stringify({ uris: [opts.offsetUri], position_ms: Math.max(0, Math.round(opts.positionMs ?? 0)) });
+    }
     await api(`/me/player/play?device_id=${encodeURIComponent(device)}`, { method: "PUT", body });
     await afterCommand();
   } catch (e) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, ExternalLink, LogOut, Pause, Play, RefreshCw, Shuffle, SkipBack, SkipForward, Star, Volume2 } from "lucide-react";
+import { Coffee, Copy, ExternalLink, LogOut, Pause, Play, RefreshCw, Shuffle, SkipBack, SkipForward, Star, Volume2 } from "lucide-react";
 import { Slider, toast } from "../../components/ui";
 import { isTauri, openExternal } from "../../lib/tauri";
 import { useData, useSettings } from "../../store/data";
@@ -22,7 +22,7 @@ import {
   useSpotify,
   type SpotifyPlaylist,
 } from "./spotify";
-import { chooseSpotifyFocusMusic } from "./focusMusic";
+import { chooseSpotifyBreakMusic, chooseSpotifyFocusMusic } from "./focusMusic";
 import { fmtSeconds } from "./LocalMusic";
 
 export function SpotifyPanel() {
@@ -131,6 +131,11 @@ function SpotifyConnected() {
     toast(`„${p.name}“ läuft ab jetzt in deinen Lernphasen.`, "success");
   };
 
+  const setBreakPlaylist = (p: SpotifyPlaylist) => {
+    chooseSpotifyBreakMusic(p.uri, p.name);
+    toast(`„${p.name}“ läuft ab jetzt in deinen Pausen.`, "success");
+  };
+
   const onVolume = (v: number) => {
     setVolume(v);
     if (volTimer.current) clearTimeout(volTimer.current);
@@ -236,7 +241,8 @@ function SpotifyConnected() {
       </div>
       <div className="playlist-grid">
         {playlists.map((p) => {
-          const isFocus = music.spotifyUri === p.uri;
+          const isFocus = music.focusSource === "spotify" && music.spotifyUri === p.uri;
+          const isBreak = music.breakSource === "spotify" && music.breakSpotifyUri === p.uri;
           const isPlaying = playback?.contextUri === p.uri && playback.isPlaying;
           return (
             <div key={p.id} className={`playlist-card ${isFocus ? "focus" : ""}`}>
@@ -258,13 +264,22 @@ function SpotifyConnected() {
                     {p.total ? ` · ${p.total} Titel` : ""}
                   </span>
                 </div>
-                <button
-                  className={`icon-btn sm ${isFocus ? "active" : ""}`}
-                  onClick={() => setFocusPlaylist(p)}
-                  title={isFocus ? "Deine Lernmusik" : "Als Lernmusik festlegen"}
-                >
-                  <Star size={14} fill={isFocus ? "currentColor" : "none"} />
-                </button>
+                <div className="row gap-4" style={{ flex: "none" }}>
+                  <button
+                    className={`icon-btn sm ${isFocus ? "active" : ""}`}
+                    onClick={() => setFocusPlaylist(p)}
+                    title={isFocus ? "Deine Lernmusik" : "Als Lernmusik festlegen"}
+                  >
+                    <Star size={14} fill={isFocus ? "currentColor" : "none"} />
+                  </button>
+                  <button
+                    className={`icon-btn sm ${isBreak ? "active" : ""}`}
+                    onClick={() => setBreakPlaylist(p)}
+                    title={isBreak ? "Deine Pausenmusik" : "Als Pausenmusik festlegen"}
+                  >
+                    <Coffee size={14} />
+                  </button>
+                </div>
               </div>
             </div>
           );

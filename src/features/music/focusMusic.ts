@@ -33,3 +33,19 @@ export function ensureFocusMusicDefault(): boolean {
   setMusic({ focusSource: "local", localPlaylistId: null, couple: true, sourceChosen: true });
   return true;
 }
+
+/* ---------------- Pausenmusik ---------------- */
+
+export function chooseBreakSource(source: MusicSettings["breakSource"]) {
+  setMusic({ breakSource: source, ...(source === "local" || source === "spotify" ? { couple: true } : {}) });
+}
+
+/** Eigene Musik (Playlist oder alle Titel) als Pausenmusik festlegen. */
+export function chooseLocalBreakMusic(playlistId: ID | null) {
+  setMusic({ breakSource: "local", breakLocalPlaylistId: playlistId, couple: true });
+}
+
+/** Spotify-Playlist als Pausenmusik festlegen. */
+export function chooseSpotifyBreakMusic(uri: string | null, name?: string) {
+  setMusic({ breakSource: "spotify", breakSpotifyUri: uri, breakSpotifyName: name, couple: true });
+}

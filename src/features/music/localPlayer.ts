@@ -6,6 +6,14 @@ import type { ID, LocalTrack } from "../../store/types";
 
 export type Repeat = "off" | "all" | "one";
 
+/** Gemerkter Stand der Lernmusik, während in der Pause etwas anderes läuft */
+export interface LocalSnapshot {
+  queue: ID[];
+  index: number;
+  position: number;
+  playlistId: ID | null;
+}
+
 interface LocalPlayerState {
   queue: ID[];
   index: number;
@@ -26,6 +34,10 @@ interface LocalPlayerState {
   seek(seconds: number): void;
   setShuffle(v: boolean): void;
   setRepeat(r: Repeat): void;
+  /** aktuellen Stand merken (null, wenn nichts geladen ist) */
+  snapshot(): LocalSnapshot | null;
+  /** gemerkten Stand wiederherstellen und an derselben Stelle weiterspielen */
+  restore(snap: LocalSnapshot, fade?: number): void;
 }
 
 let audio: HTMLAudioElement | null = null;
@@ -228,6 +240,26 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
 
   setRepeat(r) {
     set({ repeat: r });
+  },
+
+  snapshot() {
+    const s = get();
+    if (!s.queue.length) return null;
+    return { queue: [...s.queue], index: s.index, position: audio?.currentTime ?? s.position, playlistId: s.playlistId };
+  },
+
+  restore(snap, fade = 0) {
+    if (!snap.queue.length) return;
+    set({ queue: snap.queue, playlistId: snap.playlistId });
+    loadIndex(Math.min(snap.index, snap.queue.length - 1), false);
+    const a = getAudio();
+    const seekAndPlay = () => {
+      a.removeEventListener("loadedmetadata", seekAndPlay);
+      a.currentTime = Math.min(snap.position, a.duration || snap.position);
+      get().resume(fade);
+    };
+    if (a.readyState >= 1) seekAndPlay();
+    else a.addEventListener("loadedmetadata", seekAndPlay);
   },
 }));
 

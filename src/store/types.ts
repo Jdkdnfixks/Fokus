@@ -180,7 +180,11 @@ export interface Settings {
     localPlaylistId: ID | null;
     spotifyUri: string | null;
     spotifyName?: string;
-    breakBehavior: "pause" | "continue";
+    /** Musik in den Pausen: Lernmusik pausieren, weiterlaufen lassen oder eigene Pausenmusik */
+    breakSource: "pause" | "continue" | "local" | "spotify";
+    breakLocalPlaylistId: ID | null;
+    breakSpotifyUri: string | null;
+    breakSpotifyName?: string;
     fadeSeconds: number;
     ambientInFocus: boolean;
     ambientInBreak: boolean;
