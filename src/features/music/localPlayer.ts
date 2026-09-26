@@ -172,6 +172,7 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
 
   resume(fade = 0) {
     const a = getAudio();
+    clearFade(); // eine laufende Ausblendung (mit anschließendem Pausieren) abbrechen
     if (!a.src) {
       const s = get();
       if (s.queue.length) loadIndex(s.index, true);

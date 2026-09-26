@@ -63,6 +63,7 @@ export function defaultSettings(): Settings {
     music: {
       couple: true,
       focusSource: "none",
+      sourceChosen: false,
       localPlaylistId: null,
       spotifyUri: null,
       breakBehavior: "pause",
@@ -81,6 +82,7 @@ export function defaultSettings(): Settings {
     },
     general: {
       closeToTray: true,
+      autoUpdate: true,
       dayStartHour: 7,
       dayEndHour: 22,
     },

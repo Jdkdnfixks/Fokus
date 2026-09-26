@@ -1,27 +1,23 @@
 name: Build
 
-# Baut bei jedem Push den Windows-Installer (Download unter „Actions“ → Lauf → „Artifacts“).
-# Ein Tag wie v0.2.0 – oder der manuelle Start mit „Release erstellen“ – veröffentlicht
-# zusätzlich ein GitHub-Release mit dem Installer.
+# Jeder Push baut den Windows-Installer.
+# Auf dem Standard-Branch (oder beim manuellen Start) wird daraus zusätzlich ein
+# signiertes GitHub-Release – installierte Fokus-Apps finden es dann über die
+# Update-Funktion. Dafür muss das Secret TAURI_SIGNING_PRIVATE_KEY hinterlegt sein.
 
 on:
   push:
     branches: ["**"]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
-    inputs:
-      release:
-        description: "GitHub-Release mit Installer erstellen"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: true
+  # laufende Releases nicht mittendrin abbrechen
+  cancel-in-progress: false
 
 jobs:
   check:
@@ -43,6 +39,8 @@ jobs:
     name: Windows-Installer
     needs: check
     runs-on: windows-latest
+    env:
+      IS_RELEASE: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,28 +55,70 @@ jobs:
       - name: Rust-Tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      - name: Versionsnummer setzen
+        id: version
+        shell: bash
+        run: node scripts/set-version.mjs
+
+      - name: Signaturschlüssel prüfen
+        id: sign
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Kein Update-Schlüssel::Das Secret TAURI_SIGNING_PRIVATE_KEY fehlt. Es wird nur ein Installer ohne Auto-Update-Release gebaut."
+          fi
+
+      - name: Release-Notizen aus der Commit-Nachricht
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo "text<<NOTES_EOF"
+            git log -1 --pretty=%B | sed '/^Co-Authored-By:/d;/^Claude-Session:/d'
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Installer bauen
-        if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.release }}
-        run: npx tauri build
+        if: ${{ env.IS_RELEASE != 'true' || steps.sign.outputs.available != 'true' }}
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          if [ "${{ steps.sign.outputs.available }}" = "true" ]; then
+            npx tauri build
+          else
+            npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          fi
       - name: Installer hochladen
-        if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.release }}
+        if: ${{ env.IS_RELEASE != 'true' || steps.sign.outputs.available != 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Fokus-Windows-Installer
+          name: Fokus-${{ steps.version.outputs.version }}-Windows-Installer
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
-      - name: Release erstellen
-        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release }}
+      - name: Release mit Auto-Update veröffentlichen
+        if: ${{ env.IS_RELEASE == 'true' && steps.sign.outputs.available == 'true' }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: v__VERSION__
           releaseName: Fokus v__VERSION__
           releaseBody: |
-            Lade unten unter „Assets“ die Datei `Fokus_…_x64-setup.exe` herunter und führe sie aus.
-            Windows zeigt beim ersten Start evtl. „Der Computer wurde durch Windows geschützt“ –
-            dann auf „Weitere Informationen“ → „Trotzdem ausführen“ klicken.
+            ${{ steps.notes.outputs.text }}
+
+            ---
+            **Installieren:** unten unter „Assets“ die Datei `Fokus_…_x64-setup.exe` herunterladen und ausführen.
+            Ist Fokus schon installiert, meldet sich die App von selbst mit „Neue Version verfügbar“.
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true

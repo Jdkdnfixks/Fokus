@@ -1,6 +1,7 @@
 import { Segmented, Stepper, Switch } from "../../components/ui";
 import { useData, useSettings } from "../../store/data";
 import type { Settings } from "../../store/types";
+import { chooseFocusSource, chooseLocalFocusMusic, chooseSpotifyFocusMusic } from "./focusMusic";
 import { useSpotify } from "./spotify";
 
 export function CouplingPanel() {
@@ -27,7 +28,7 @@ export function CouplingPanel() {
         </div>
         <Segmented<Settings["music"]["focusSource"]>
           value={music.focusSource}
-          onChange={(v) => set({ focusSource: v })}
+          onChange={(v) => chooseFocusSource(v)}
           options={[
             { value: "none", label: "Keine" },
             { value: "local", label: "Eigene Musik" },
@@ -46,7 +47,7 @@ export function CouplingPanel() {
             className="select"
             style={{ width: 240 }}
             value={music.localPlaylistId ?? ""}
-            onChange={(e) => set({ localPlaylistId: e.target.value || null })}
+            onChange={(e) => chooseLocalFocusMusic(e.target.value || null)}
           >
             <option value="">Alle Titel</option>
             {playlists.map((p) => (
@@ -75,7 +76,7 @@ export function CouplingPanel() {
             disabled={!spotifyConnected}
             onChange={(e) => {
               const p = spotifyPlaylists.find((x) => x.uri === e.target.value);
-              set({ spotifyUri: p?.uri ?? null, spotifyName: p?.name });
+              chooseSpotifyFocusMusic(p?.uri ?? null, p?.name);
             }}
           >
             <option value="">Zuletzt gespielte fortsetzen</option>

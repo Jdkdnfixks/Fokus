@@ -22,6 +22,7 @@ import {
   useSpotify,
   type SpotifyPlaylist,
 } from "./spotify";
+import { chooseSpotifyFocusMusic } from "./focusMusic";
 import { fmtSeconds } from "./LocalMusic";
 
 export function SpotifyPanel() {
@@ -118,7 +119,6 @@ function SpotifySetup() {
 function SpotifyConnected() {
   const { profile, devices, preferredDevice, playlists, playback, error, status } = useSpotify();
   const music = useSettings().music;
-  const setSettings = useData((s) => s.setSettings);
   const [volume, setVolume] = useState<number | null>(null);
   const volTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -127,7 +127,7 @@ function SpotifyConnected() {
   }, []);
 
   const setFocusPlaylist = (p: SpotifyPlaylist) => {
-    setSettings((s) => ({ ...s, music: { ...s.music, spotifyUri: p.uri, spotifyName: p.name, focusSource: "spotify", couple: true } }));
+    chooseSpotifyFocusMusic(p.uri, p.name);
     toast(`„${p.name}“ läuft ab jetzt in deinen Lernphasen.`, "success");
   };
 

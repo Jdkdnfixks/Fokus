@@ -13,7 +13,7 @@ import {
   Square,
   Waves,
 } from "lucide-react";
-import { ModuleSelect, ProgressBar, Segmented, Stepper, Switch } from "../../components/ui";
+import { ModuleSelect, ProgressBar, Segmented, Stepper, Switch, toast } from "../../components/ui";
 import { addDays, fmtClock, fmtHours, fmtTime, greeting, startOfDay } from "../../lib/time";
 import { useNow } from "../../lib/useNow";
 import { EVENT_TYPES } from "../../store/defaults";
@@ -22,6 +22,8 @@ import { useNav } from "../../store/nav";
 import type { TimerPreset } from "../../store/types";
 import { expandEvents } from "../calendar/recurrence";
 import { ambientToggle, useAmbient } from "../music/ambient";
+import { chooseLocalFocusMusic, chooseSpotifyFocusMusic } from "../music/focusMusic";
+import { useSpotify } from "../music/spotify";
 import { currentStreak, pomodorosByTask, todayMinutes, weekMinutes } from "../stats/stats";
 import { QuickAddTask } from "../tasks/QuickAdd";
 import { TaskRow } from "../tasks/TaskRow";
@@ -217,13 +219,32 @@ function QuickToggles() {
   const setSettings = useData((s) => s.setSettings);
   const ambientPlaying = useAmbient((s) => s.playing);
   const navigate = useNav((s) => s.navigate);
+  const trackCount = useData((s) => s.data.tracks.length);
+  const playlists = useData((s) => s.data.playlists);
+  const spotifyConnected = useSpotify((s) => s.connected);
   const m = settings.music;
 
+  const toggleMusic = (on: boolean) => {
+    if (!on) {
+      setSettings((s) => ({ ...s, music: { ...s.music, couple: false } }));
+      return;
+    }
+    if (m.focusSource !== "none") setSettings((s) => ({ ...s, music: { ...s.music, couple: true } }));
+    else if (trackCount > 0) chooseLocalFocusMusic(null);
+    else if (spotifyConnected) chooseSpotifyFocusMusic(m.spotifyUri, m.spotifyName);
+    else {
+      toast("Füge zuerst eigene MP3s hinzu oder verbinde Spotify.", "info");
+      navigate("music");
+    }
+  };
+
+  const localName =
+    m.localPlaylistId ? playlists.find((p) => p.id === m.localPlaylistId)?.name ?? "Playlist" : "alle eigenen Titel";
   const musicLabel =
     m.focusSource === "spotify"
       ? `Spotify${m.spotifyName ? ` · ${m.spotifyName}` : ""}`
       : m.focusSource === "local"
-        ? "Eigene Musik"
+        ? `Eigene Musik · ${localName}`
         : "Quelle wählen";
 
   return (
@@ -231,11 +252,7 @@ function QuickToggles() {
       <div className="quick-toggle">
         <div className="row between">
           <Headphones size={16} />
-          <Switch
-            checked={m.couple && m.focusSource !== "none"}
-            disabled={m.focusSource === "none"}
-            onChange={(v) => setSettings((s) => ({ ...s, music: { ...s.music, couple: v } }))}
-          />
+          <Switch checked={m.couple && m.focusSource !== "none"} onChange={toggleMusic} />
         </div>
         <span className="small">Musik</span>
         <button className="link-btn tiny ellipsis" onClick={() => navigate("music")} title={musicLabel}>

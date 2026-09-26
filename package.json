@@ -1,7 +1,7 @@
 {
   "name": "fokus",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Fokus – Lern-App mit Pomodoro-Timer, Kalender, Musik und Statistiken",
   "scripts": {
@@ -22,6 +22,8 @@
     "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-notification": "^2.4.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.12.0",
     "ical.js": "^2.2.1",
     "lucide-react": "^0.577.0",
     "react": "^19.2.0",

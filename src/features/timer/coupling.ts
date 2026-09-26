@@ -19,8 +19,6 @@ function modeOf(s: { phase: string; status: string }): Mode {
 }
 
 let started = false;
-/** Titel-Queue, die der Timer zuletzt gestartet hat (für "fortsetzen statt neu starten") */
-let focusQueueKey: string | null = null;
 
 export function startCoupling() {
   if (started) return;
@@ -53,9 +51,8 @@ async function onModeChange(m: Mode) {
   }
 
   const music = settings.music;
-  if (!music.couple) return;
 
-  // ---- Hintergrundgeräusche ----
+  // ---- Hintergrundgeräusche (eigene Schalter, unabhängig von der Musik) ----
   const wantAmbient =
     (m === "focus-running" && music.ambientInFocus) || (m === "break-running" && music.ambientInBreak);
   const ambient = useAmbient.getState();
@@ -66,7 +63,7 @@ async function onModeChange(m: Mode) {
   }
 
   // ---- Musik ----
-  if (music.focusSource === "none") return;
+  if (!music.couple || music.focusSource === "none") return;
   const fade = music.fadeSeconds;
 
   if (m === "focus-running") {
@@ -81,18 +78,20 @@ async function onModeChange(m: Mode) {
   else if (music.focusSource === "spotify" && useSpotify.getState().playback?.isPlaying) await spotifyPause();
 }
 
+/**
+ * Startet die eigene Lernmusik. Läuft schon etwas, bleibt es unverändert.
+ * Ist die gewählte Playlist nur pausiert, geht es an derselben Stelle weiter
+ * (wichtig bei langen MP3s) – sonst beginnt die Playlist von vorne.
+ */
 function startLocalFocusMusic(playlistId: string | null, fade: number) {
   const player = useLocalPlayer.getState();
-  const key = playlistId ?? "__alle__";
-  const ids = playlistTrackIds(playlistId);
-  if (!ids.length) return;
-  if (player.playing && focusQueueKey === key) return;
-  if (focusQueueKey === key && player.queue.length) {
+  if (player.playing) return;
+  if (player.queue.length && player.playlistId === playlistId) {
     player.resume(fade);
-  } else {
-    focusQueueKey = key;
-    player.playQueue(ids, 0, playlistId);
+    return;
   }
+  const ids = playlistTrackIds(playlistId);
+  if (ids.length) player.playQueue(ids, 0, playlistId);
 }
 
 async function startSpotifyFocusMusic(uri: string | null) {

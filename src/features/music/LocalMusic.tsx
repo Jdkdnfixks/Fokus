@@ -10,6 +10,7 @@ import {
   Repeat1,
   Shuffle,
   SkipBack,
+  Timer,
   SkipForward,
   Trash2,
   Volume2,
@@ -20,6 +21,7 @@ import { uid } from "../../lib/ids";
 import { call, errorText, isTauri } from "../../lib/tauri";
 import { useData, useSettings } from "../../store/data";
 import type { ID, LocalTrack } from "../../store/types";
+import { chooseFocusSource, chooseLocalFocusMusic, ensureFocusMusicDefault } from "./focusMusic";
 import { applyLocalVolume, currentLocalTrack, playlistTrackIds, stopIfTrackRemoved, useLocalPlayer } from "./localPlayer";
 
 interface ImportedTrack {
@@ -35,9 +37,12 @@ interface ImportedTrack {
 const AUDIO_EXT = ["mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac", "webm"];
 
 export function fmtSeconds(s?: number) {
-  if (!s || !isFinite(s)) return "–";
-  const m = Math.floor(s / 60);
-  return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  if (s === undefined || !isFinite(s) || s < 0) return "–";
+  const total = Math.floor(s);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
 
 async function importPaths(paths: string[], playlistId: ID | null) {
@@ -64,7 +69,10 @@ async function importPaths(paths: string[], playlistId: ID | null) {
       const pl = store.data.playlists.find((p) => p.id === playlistId);
       if (pl) store.patch("playlists", pl.id, { trackIds: [...pl.trackIds, ...tracks.map((t) => t.id)] });
     }
-    toast(`${tracks.length} ${tracks.length === 1 ? "Titel" : "Titel"} hinzugefügt.`, "success");
+    toast(`${tracks.length} Titel hinzugefügt.`, "success");
+    if (ensureFocusMusicDefault()) {
+      toast("Deine Musik startet ab jetzt automatisch, sobald du den Timer startest.", "success", 6000);
+    }
   } catch (e) {
     toast(`Import fehlgeschlagen: ${errorText(e)}`, "error");
   }
@@ -81,6 +89,8 @@ export function LocalMusic() {
   const [dragOver, setDragOver] = useState(false);
   const player = useLocalPlayer();
   const current = player.queue[player.index];
+  const music = useSettings().music;
+  const isFocusMusic = music.couple && music.focusSource === "local" && music.localPlaylistId === selected;
 
   const playlist = playlists.find((p) => p.id === selected) ?? null;
   const ids = useMemo(() => (playlist ? playlistTrackIds(playlist.id) : tracks.map((t) => t.id)), [playlist, tracks]);
@@ -196,6 +206,15 @@ export function LocalMusic() {
             </div>
           </div>
           <div className="row gap-4">
+            {list.length > 0 && (
+              <button
+                className={`btn ${isFocusMusic ? "soft" : ""}`}
+                onClick={() => (isFocusMusic ? chooseFocusSource("none") : chooseLocalFocusMusic(selected))}
+                title={isFocusMusic ? "Startet automatisch mit dem Timer – klicken zum Ausschalten" : "Mit dem Timer automatisch abspielen"}
+              >
+                <Timer size={15} /> {isFocusMusic ? "Lernmusik ✓" : "Als Lernmusik"}
+              </button>
+            )}
             <button className="btn" onClick={() => void addFiles()}>
               <FolderPlus size={15} /> Dateien hinzufügen
             </button>
@@ -206,6 +225,16 @@ export function LocalMusic() {
             )}
           </div>
         </div>
+
+        {isFocusMusic && (
+          <div className="banner info">
+            <Timer size={15} />
+            <span>
+              {playlist ? `„${playlist.name}“` : "Deine Musik"} startet automatisch mit jeder Lernphase und pausiert in den Pausen. Nach einer
+              Pause geht es an derselben Stelle weiter.
+            </span>
+          </div>
+        )}
 
         <div className={`drop-zone ${dragOver ? "over" : ""}`}>
           {dragOver ? "Loslassen zum Hinzufügen" : "MP3-Dateien einfach hierher ins Fenster ziehen"}

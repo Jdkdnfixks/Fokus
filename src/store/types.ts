@@ -175,6 +175,8 @@ export interface Settings {
   music: {
     couple: boolean;
     focusSource: "none" | "local" | "spotify";
+    /** true, sobald die Quelle bewusst gewählt wurde (sonst wählt Fokus eigene Musik automatisch) */
+    sourceChosen: boolean;
     localPlaylistId: ID | null;
     spotifyUri: string | null;
     spotifyName?: string;
@@ -196,6 +198,8 @@ export interface Settings {
   };
   general: {
     closeToTray: boolean;
+    /** automatisch nach neuen Versionen suchen */
+    autoUpdate: boolean;
     dayStartHour: number;
     dayEndHour: number;
   };

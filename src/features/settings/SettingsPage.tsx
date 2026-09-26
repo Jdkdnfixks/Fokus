@@ -9,6 +9,7 @@ import {
   Moon,
   Palette,
   Plus,
+  RefreshCw,
   RotateCcw,
   ShieldBan,
   ShieldCheck,
@@ -29,6 +30,7 @@ import type { StorageInfo } from "../../store/persistence";
 import type { Accent, ChimeSound, Settings, ThemeMode } from "../../store/types";
 import { normalizeDomain, refreshBlockerStatus, setupBlocker, teardownBlocker, useBlocker } from "../blocker/blocker";
 import { setMusicDir } from "../music/localPlayer";
+import { checkForUpdates, installUpdate, loadCurrentVersion, useUpdate } from "../update/updater";
 
 function Section({ id, icon, title, children, desc }: { id: string; icon: ReactNode; title: string; desc?: string; children: ReactNode }) {
   return (
@@ -518,9 +520,43 @@ function SystemSection() {
       <Row title="Mit Windows starten" desc="Fokus startet minimiert im Infobereich (gilt nur für dieses Gerät).">
         <Switch checked={!!autostart} disabled={autostart === null} onChange={(v) => void toggleAutostart(v)} />
       </Row>
-      <Row title="Version">
-        <span className="faint small">Fokus 0.1.0</span>
+      <Row title="Automatisch nach Updates suchen" desc="Beim Start und danach alle paar Stunden. Installiert wird nur, wenn du zustimmst.">
+        <Switch checked={general.autoUpdate} onChange={(v) => set("general", { autoUpdate: v })} />
       </Row>
+      <UpdateRow />
     </Section>
+  );
+}
+
+function UpdateRow() {
+  const { currentVersion, status, available, error, progress } = useUpdate();
+  useEffect(() => {
+    void loadCurrentVersion();
+  }, []);
+  const busy = status === "downloading" || status === "installing";
+  const desc =
+    status === "checking"
+      ? "Suche nach Updates …"
+      : busy
+        ? `Update wird ${status === "installing" ? "installiert" : `heruntergeladen (${Math.round(progress * 100)} %)`} …`
+        : available
+          ? `Version ${available.version} ist verfügbar.`
+          : status === "uptodate"
+            ? "Du hast die neueste Version."
+            : error ?? "Updates kommen direkt von GitHub und sind signiert.";
+  return (
+    <Row title={`Version ${currentVersion ?? "–"}`} desc={desc}>
+      <div className="row">
+        {available && !busy ? (
+          <button className="btn primary" onClick={() => void installUpdate()}>
+            <Download size={15} /> Jetzt aktualisieren
+          </button>
+        ) : (
+          <button className="btn" disabled={!isTauri || status === "checking" || busy} onClick={() => void checkForUpdates(true)}>
+            <RefreshCw size={15} /> Nach Updates suchen
+          </button>
+        )}
+      </div>
+    </Row>
   );
 }

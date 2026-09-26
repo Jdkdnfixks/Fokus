@@ -14,15 +14,18 @@ import {
   Timer,
   TriangleAlert,
 } from "lucide-react";
-import { ConfirmHost, ToastHost } from "./components/ui";
+import { ConfirmHost, ToastHost, toast } from "./components/ui";
 import { CalendarPage } from "./features/calendar/CalendarPage";
 import { ModulesPage } from "./features/modules/ModulesPage";
 import { MusicPage } from "./features/music/MusicPage";
+import { ensureFocusMusicDefault } from "./features/music/focusMusic";
 import { NowPlaying } from "./features/music/NowPlaying";
 import { setMusicDir } from "./features/music/localPlayer";
 import { startSpotifyPolling } from "./features/music/spotify";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { StatsPage } from "./features/stats/StatsPage";
+import { UpdateBanner } from "./features/update/UpdateBanner";
+import { startUpdateChecks } from "./features/update/updater";
 import { TasksPage } from "./features/tasks/TasksPage";
 import { startTimerEngine } from "./features/timer/engine";
 import { MiniTimer } from "./features/timer/MiniTimer";
@@ -165,6 +168,7 @@ function AppBanners() {
   const resolve = useData((s) => s.resolveConflict);
   return (
     <>
+      <UpdateBanner />
       {conflict && (
         <div className="banner danger app-banner">
           <TriangleAlert size={16} />
@@ -249,6 +253,10 @@ function useStartup() {
     startTimerEngine();
     startSpotifyPolling();
     void refreshBlockerStatus();
+    startUpdateChecks();
+    if (ensureFocusMusicDefault()) {
+      toast("Deine eigene Musik startet ab jetzt automatisch mit dem Timer. Ändern kannst du das unter Musik → Timer-Kopplung.", "success", 8000);
+    }
     void autoSyncFeeds();
   }, [status]);
 

@@ -25,17 +25,37 @@ Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musi
 | **Website-Blocker** | Sperrt ablenkende Seiten (YouTube, Instagram, …) während der Lernphasen in allen Browsern |
 | **Statistik** | Lerntage-Heatmap, Lernzeit pro Tag/Woche und Modul, Serien, Wochenziele, beste Tageszeit laut deinen Reflexionen, CSV-Export |
 | **PC & Laptop** | Datenordner in OneDrive/Sciebo/Dropbox legen → beide Geräte nutzen dieselben Daten; tägliche Sicherungen |
+| **Updates** | Fokus sucht selbst nach neuen Versionen und installiert sie mit einem Klick |
 
 ## Installation
 
-1. Öffne auf GitHub den Reiter **Actions**, wähle den neuesten erfolgreichen Lauf von „Build“ und lade unten unter **Artifacts** „Fokus-Windows-Installer“ herunter.
-   *(Alternativ unter **Releases**, sobald eines erstellt wurde – siehe unten.)*
-2. ZIP entpacken und `Fokus_…_x64-setup.exe` ausführen. Administratorrechte sind nicht nötig.
+1. Öffne auf GitHub **[Releases](https://github.com/Jdkdnfixks/Fokus/releases/latest)** und lade unter „Assets“ die Datei `Fokus_…_x64-setup.exe` herunter.
+2. Datei ausführen. Administratorrechte sind nicht nötig.
 3. Windows zeigt eventuell *„Der Computer wurde durch Windows geschützt“*, weil die App nicht kostenpflichtig signiert ist. Klicke auf **Weitere Informationen → Trotzdem ausführen**.
 
-Updates installierst du genauso – einfach den neuen Installer ausführen, deine Daten bleiben erhalten.
+## Updates
 
-**Release erstellen:** Actions → „Build“ → „Run workflow“ → Haken bei „GitHub-Release mit Installer erstellen“. Die Versionsnummer kommt aus `src-tauri/tauri.conf.json` und `package.json`.
+Fokus aktualisiert sich selbst: Beim Start (und danach alle paar Stunden) prüft die App, ob es eine neue Version gibt. Dann erscheint oben der Hinweis **„Neue Version … ist verfügbar“** – ein Klick auf „Jetzt aktualisieren“ lädt das Update, installiert es und startet Fokus neu. Deine Daten bleiben erhalten, weil sie getrennt vom Programm im Datenordner liegen. Manuell suchen: **Einstellungen → System → Nach Updates suchen**.
+
+So entsteht eine neue Version:
+
+1. Eine Änderung wird auf den Standard-Branch gepusht.
+2. GitHub Actions baut den Installer, signiert ihn und veröffentlicht ihn als Release `v0.2.<Build-Nummer>`.
+3. Alle installierten Fokus-Apps (PC und Laptop) bieten das Update an.
+
+Ein Release lässt sich auch von Hand anstoßen: **Actions → Build → Run workflow**.
+
+### Einmalige Einrichtung des Update-Schlüssels
+
+Updates werden signiert, damit die App nur echte Fokus-Updates installiert. Dafür braucht GitHub den privaten Schlüssel als *Secret*:
+
+1. Im Repository **Settings → Secrets and variables → Actions → New repository secret** öffnen.
+2. Name: `TAURI_SIGNING_PRIVATE_KEY`, Wert: der komplette Inhalt der Schlüsseldatei `fokus-update.key`.
+3. Speichern. Der Schlüssel hat kein Passwort.
+
+Bewahre die Schlüsseldatei zusätzlich sicher auf (z. B. im Passwortmanager). Geht sie verloren, muss einmalig ein neuer Schlüssel erzeugt und die App danach von Hand neu installiert werden. Der öffentliche Teil des Schlüssels steht in `src-tauri/tauri.conf.json`.
+
+Fehlt das Secret, baut GitHub trotzdem einen Installer (unter „Actions → Lauf → Artifacts“), veröffentlicht aber kein Update.
 
 ## Einrichtung
 
@@ -51,6 +71,9 @@ Voraussetzung: **Spotify Premium** (Spotify erlaubt die Fernsteuerung nur damit)
 1. **Musik → Spotify** öffnen und dem Assistenten folgen: im [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) eine App anlegen, als Redirect URI `http://127.0.0.1:43821/callback` eintragen, „Web API“ auswählen.
 2. Die **Client ID** in Fokus einfügen und „Mit Spotify verbinden“ klicken.
 3. Bei einer Playlist auf den **Stern** klicken → sie läuft ab jetzt automatisch in deinen Lernphasen.
+
+### Eigene Musik mit dem Timer
+Sobald du MP3s hinzufügst, spielt Fokus sie automatisch in jeder Lernphase ab und pausiert sie in den Pausen – danach geht es an derselben Stelle weiter (praktisch bei langen Lernmixen). Mit **„Als Lernmusik“** auf der Musikseite legst du fest, welche Playlist läuft; unter **Musik → Timer-Kopplung** stellst du Quelle und Verhalten ein.
 
 Fokus steuert die Spotify-App auf deinem PC. Ist Spotify nicht geöffnet, startet Fokus die App beim ersten Abspielen.
 
@@ -77,6 +100,8 @@ npm run tauri dev     # App mit Live-Reload starten
 npm test              # Unit-Tests (Wiederholungen, Planer, Statistik, iCal)
 npm run typecheck
 npm run tauri build   # Installer bauen (src-tauri/target/release/bundle/nsis)
+                      # mit Auto-Update-Signatur: TAURI_SIGNING_PRIVATE_KEY setzen,
+                      # sonst: npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 ```
 
 `npm run dev` startet nur die Oberfläche im Browser (Daten dann im Browser-Speicher, ohne Desktop-Funktionen) – praktisch zum Gestalten.
