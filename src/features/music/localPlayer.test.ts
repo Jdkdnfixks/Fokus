@@ -167,25 +167,28 @@ describe("Überblendung im eigenen Player", () => {
 
 describe("Gleich laute Titel", () => {
   it("spielt einen lauten Titel entsprechend leiser ab", async () => {
-    useData.getState().patch("tracks", "t1", { loudness: -8 }); // 6 dB lauter als Spotify-Normal
+    useData.getState().patch("tracks", "t1", { loudness: -8, peak: 1 }); // 6 dB lauter als Spotify-Normal
     useLocalPlayer.getState().playQueue(["t1"], 0, "lern");
     await vi.advanceTimersByTimeAsync(20);
     expect(deck("lernen.mp3").volume).toBeCloseTo(TARGET * 10 ** (-6 / 20));
   });
 
-  it("gleicht einen laufenden Titel sanft an, sobald seine Messung fertig ist", async () => {
+  it("gleicht einen laufenden Titel an, sobald seine Messung fertig ist", async () => {
     useData.getState().patch("tracks", "t1", { loudness: undefined });
     useLocalPlayer.getState().playQueue(["t1"], 0, "lern");
     await vi.advanceTimersByTimeAsync(20);
     const lern = deck("lernen.mp3");
     expect(lern.volume).toBeCloseTo(TARGET);
 
-    useData.getState().patch("tracks", "t1", { loudness: -8 });
-    await vi.advanceTimersByTimeAsync(700);
-    expect(lern.volume).toBeLessThan(TARGET);
-    expect(lern.volume).toBeGreaterThan(TARGET * 0.5);
-    await vi.advanceTimersByTimeAsync(1000);
+    useData.getState().patch("tracks", "t1", { loudness: -8, peak: 1 });
     expect(lern.volume).toBeCloseTo(TARGET * 10 ** (-6 / 20));
+  });
+
+  it("ohne Web Audio: leise Titel höchstens bis 100 %", async () => {
+    useData.getState().patch("tracks", "t1", { loudness: -30, peak: 0.1 });
+    useLocalPlayer.getState().playQueue(["t1"], 0, "lern");
+    await vi.advanceTimersByTimeAsync(20);
+    expect(deck("lernen.mp3").volume).toBe(1);
   });
 
   it("der Regler wirkt sofort", async () => {

@@ -125,6 +125,8 @@ export interface LocalTrack {
   duration?: number;
   /** gemessene Lautheit in LUFS (null = nicht messbar, fehlt = noch nicht gemessen) */
   loudness?: number | null;
+  /** höchster Ausschlag (1 = Vollaussteuerung), zusammen mit `loudness` gemessen */
+  peak?: number | null;
   addedAt: string;
 }
 

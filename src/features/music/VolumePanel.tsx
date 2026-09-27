@@ -3,9 +3,9 @@ import { Segmented, Slider, Stepper, Switch, toast } from "../../components/ui";
 import { useData, useSettings } from "../../store/data";
 import type { Settings } from "../../store/types";
 import { useLocalPlayer } from "./localPlayer";
-import { retryLoudnessScan, useLoudnessScan } from "./loudnessScan";
+import { needsMeasurement, retryLoudnessScan, useLoudnessScan } from "./loudnessScan";
 import { spotifyPause, spotifyPlayFadeIn, useSpotify } from "./spotify";
-import { formatOffset } from "./volume";
+import { formatOffset, isBoostLimited } from "./volume";
 import { setMusicVolume, setVolumeOption } from "./volumeControl";
 
 type Music = Settings["music"];
@@ -44,8 +44,8 @@ export function VolumePanel() {
           <div className="setting-text">
             <span className="strong">Eigene Musik gleich laut abspielen</span>
             <span className="desc">
-              Fokus misst jede Datei einmal und gleicht laute und leise Titel aus – auf denselben Pegel wie Spotify. Deine Dateien
-              bleiben dabei unverändert.
+              Fokus misst jede Datei einmal, macht laute Titel leiser und leise lauter – auf denselben Pegel wie Spotify. Deine
+              Dateien bleiben dabei unverändert. Die Korrektur je Titel siehst du unter „Eigene Musik“ in der Spalte „Pegel“.
             </span>
           </div>
           <Switch checked={music.normalize} onChange={(v) => setVolumeOption({ normalize: v })} />
@@ -98,12 +98,14 @@ export function VolumePanel() {
 
 function MeasureStatus() {
   const tracks = useData((s) => s.data.tracks);
+  const music = useSettings().music;
   const currentId = useLoudnessScan((s) => s.currentId);
   if (!tracks.length) return <p className="small muted mt-8">Sobald du eigene Musik hinzufügst, wird sie automatisch gemessen.</p>;
 
-  const measured = tracks.filter((t) => typeof t.loudness === "number").length;
+  const pending = tracks.filter(needsMeasurement).length;
   const unsupported = tracks.filter((t) => t.loudness === null).length;
-  const pending = tracks.length - measured - unsupported;
+  const measured = tracks.length - pending - unsupported;
+  const limited = tracks.filter((t) => !needsMeasurement(t) && isBoostLimited(t, music)).length;
   const current = tracks.find((t) => t.id === currentId);
 
   return (
@@ -127,6 +129,13 @@ function MeasureStatus() {
               </button>
             </>
           )}
+        </span>
+      )}
+      {limited > 0 && (
+        <span className="faint">
+          {limited === 1 ? "Ein leiser Titel kann" : `${limited} leise Titel können`} bei dieser Lautstärke nicht ganz angehoben werden, weil
+          {limited === 1 ? " er" : " sie"} sonst übersteuern {limited === 1 ? "würde" : "würden"}. Abhilfe: den Regler hier etwas leiser und
+          dafür Windows lauter stellen.
         </span>
       )}
       {unsupported > 0 && (

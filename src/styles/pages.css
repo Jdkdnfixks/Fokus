@@ -895,3 +895,20 @@ rect.heat-cell:focus-visible {
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
+
+/* Eigene Musik: Playlist umbenennen, Pegelspalte */
+.playlist-name-input {
+  font-size: 18px;
+  font-weight: 600;
+  height: 34px;
+  min-width: 220px;
+}
+h2.renamable {
+  cursor: text;
+}
+.level-cell {
+  white-space: nowrap;
+}
+.level-cell.limited {
+  color: var(--warning);
+}

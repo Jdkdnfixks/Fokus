@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { defaultSettings, normalizeData } from "../../store/defaults";
 import {
+  appliedCorrectionDb,
+  formatDb,
   formatOffset,
+  isBoostLimited,
+  outputGain,
   gainToSlider,
   localVolumeFor,
   sliderFromSpotifyPercent,
@@ -73,5 +77,21 @@ describe("Lautstärkeregler", () => {
     expect("localVolume" in d.settings.music).toBe(false);
     expect(d.settings.music.normalize).toBe(true);
     expect(d.settings.music.linkVolume).toBe(true);
+  });
+
+  it("hebt leise Titel an, solange die Spitzen unter −1 dBFS bleiben", () => {
+    const m = music({ volume: 0.75 }); // −10 dB
+    expect(appliedCorrectionDb({ loudness: -20, peak: 0.3 }, m)).toBeCloseTo(6);
+    expect(isBoostLimited({ loudness: -20, peak: 0.3 }, m)).toBe(false);
+    // Regler ganz oben: nur noch bis zur Spitze anheben
+    const full = music({ volume: 1 });
+    expect(db(outputGain(1, { loudness: -20, peak: 0.5 }, full))).toBeCloseTo(-1 - db(0.5));
+    expect(isBoostLimited({ loudness: -20, peak: 0.5 }, full)).toBe(true);
+    // ohne bekannte Spitze wird nicht über den Regler hinaus angehoben
+    expect(outputGain(1, { loudness: -20 }, full)).toBe(1);
+    // leiser machen geht immer
+    expect(appliedCorrectionDb({ loudness: -9, peak: 1 }, full)).toBeCloseTo(-5);
+    expect(formatDb(-4.84)).toBe("−4,8 dB");
+    expect(formatDb(2)).toBe("+2,0 dB");
   });
 });

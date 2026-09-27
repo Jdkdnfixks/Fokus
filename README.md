@@ -80,6 +80,9 @@ Voraussetzung: **Spotify Premium** (Spotify erlaubt die Fernsteuerung nur damit)
 2. Die **Client ID** in Fokus einfügen und „Mit Spotify verbinden“ klicken.
 3. Bei einer Playlist auf den **Stern** klicken → sie läuft ab jetzt automatisch in deinen Lernphasen.
 
+### Playlists
+Unter **Musik → Eigene Musik** legst du Playlists an. Umbenennen: Playlist auswählen und auf den **Stift** klicken (oder doppelt auf den Namen klicken), neuen Namen eingeben, **Enter**.
+
 ### Eigene Musik mit dem Timer
 Sobald du MP3s hinzufügst, spielt Fokus sie automatisch in jeder Lernphase ab und pausiert sie in den Pausen – danach geht es an derselben Stelle weiter (praktisch bei langen Lernmixen). Mit **„Als Lernmusik“** auf der Musikseite legst du fest, welche Playlist läuft; unter **Musik → Timer-Kopplung** stellst du Quelle und Verhalten ein.
 
@@ -90,7 +93,7 @@ Der Wechsel ist fließend: In den letzten Sekunden einer Phase wird die bisherig
 
 ### Lautstärke
 Unter **Musik → Lautstärke**:
-- **Eigene Musik gleich laut abspielen**: Fokus misst jede Datei einmal im Hintergrund (Lautheit in LUFS, dasselbe Verfahren wie bei Spotify; ein 2-Stunden-Mix dauert etwa eine halbe Minute) und gleicht laute und leise Titel aus. Die Dateien bleiben unverändert.
+- **Eigene Musik gleich laut abspielen**: Fokus misst jede Datei einmal im Hintergrund (Lautheit in LUFS und Spitzenpegel, dasselbe Verfahren wie bei Spotify; ein 2-Stunden-Mix dauert etwa eine halbe Minute). Laute Titel werden leiser, leise lauter – angehoben wird nur so weit, dass nichts übersteuert. Die Korrektur je Titel steht unter **Eigene Musik** in der Spalte **Pegel**. Die Dateien bleiben unverändert. Tipp: Kann ein leiser Titel nicht ganz angehoben werden (Pegel in Orange), den Regler in Fokus etwas leiser und Windows lauter stellen.
 - **Spotify mit demselben Regler steuern**: Ein Regler für MP3s und Spotify – im Player, im Spotify-Tab und hier. Änderst du die Lautstärke direkt in Spotify, übernimmt Fokus sie.
 - **Lautstärkepegel in Spotify**: dasselbe wählen wie in den Spotify-Einstellungen („Lautstärkepegel“, Standard *Normal*; „Lautstärke normalisieren“ sollte an sein). Dann klingen MP3s und Spotify gleich laut.
 - **Feinabgleich**: Klingt Spotify trotzdem lauter oder leiser, hier nachjustieren. Mit **Umschalten** wechselst du zum Vergleich zwischen Spotify und deiner Musik hin und her.

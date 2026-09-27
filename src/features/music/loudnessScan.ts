@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { call, isTauri } from "../../lib/tauri";
 import { useData } from "../../store/data";
-import type { ID } from "../../store/types";
+import type { ID, LocalTrack } from "../../store/types";
 
 /**
  * Misst im Hintergrund die Lautheit aller noch nicht gemessenen Titel –
@@ -15,8 +15,13 @@ let running = false;
 /** in dieser Sitzung fehlgeschlagen (z. B. Datei noch nicht aus der Cloud geladen) */
 const failed = new Set<ID>();
 
+/** noch nicht gemessen – oder aus einer älteren Version ohne Spitzenpegel */
+export function needsMeasurement(t: LocalTrack): boolean {
+  return t.loudness === undefined || (typeof t.loudness === "number" && t.peak === undefined);
+}
+
 function nextTrack() {
-  return useData.getState().data.tracks.find((t) => t.loudness === undefined && !failed.has(t.id));
+  return useData.getState().data.tracks.find((t) => needsMeasurement(t) && !failed.has(t.id));
 }
 
 async function run() {
@@ -26,9 +31,11 @@ async function run() {
     for (let t = nextTrack(); t; t = nextTrack()) {
       useLoudnessScan.setState({ currentId: t.id });
       try {
-        const lufs = await call<number | null>("music_loudness", { file: t.file });
+        const m = await call<{ lufs: number; peak: number } | null>("music_loudness", { file: t.file });
         const store = useData.getState();
-        if (store.data.tracks.some((x) => x.id === t!.id)) store.patch("tracks", t.id, { loudness: lufs ?? null });
+        if (store.data.tracks.some((x) => x.id === t!.id)) {
+          store.patch("tracks", t.id, { loudness: m?.lufs ?? null, peak: m?.peak ?? null });
+        }
       } catch {
         failed.add(t.id);
       }

@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { audioContext } from "../../lib/audio";
 import { isTauri } from "../../lib/tauri";
 import { useData } from "../../store/data";
 import type { ID, LocalTrack } from "../../store/types";
-import { localVolumeFor } from "./volume";
+import { faderTarget, outputGain } from "./volume";
 
 export type Repeat = "off" | "all" | "one";
 
@@ -46,9 +47,23 @@ interface LocalPlayerState {
  * Der Player arbeitet mit bis zu zwei Audio-Elementen („Decks“): Beim Wechsel
  * der Musik wird das alte Deck ausgeblendet, während das neue eingeblendet wird
  * (Überblendung wie bei Spotify). `audio` ist immer das aktuelle Deck.
+ *
+ * Jedes Deck läuft über Web Audio (Audio-Element → Verstärker → Ausgabe), damit
+ * leise Titel auch über 100 % angehoben werden können. Klappt das nicht, regelt
+ * Fokus wie früher direkt die Lautstärke des Audio-Elements.
  */
 let audio: HTMLAudioElement | null = null;
 const ramps = new Map<HTMLAudioElement, ReturnType<typeof setInterval>>();
+/** Lautstärke eines Decks ohne Pegelausgleich (0–1), einschließlich Blenden */
+const faders = new WeakMap<HTMLAudioElement, number>();
+/** Web-Audio-Kette eines Decks */
+const chains = new WeakMap<HTMLAudioElement, { source: MediaElementAudioSourceNode; gain: GainNode }>();
+/** Titel, der in einem Deck geladen ist (für den Pegelausgleich) */
+const deckTracks = new WeakMap<HTMLAudioElement, ID>();
+/** Decks, die gerade spielen sollen (für den Wechsel auf ein einfaches Deck) */
+const wantsPlay = new WeakSet<HTMLAudioElement>();
+/** false, sobald sich gezeigt hat, dass Web Audio hier nicht funktioniert */
+let webAudioOk = true;
 let musicDir: string | null = null;
 
 export function setMusicDir(dir: string | null) {
@@ -61,14 +76,89 @@ export function trackUrl(track: LocalTrack): string | null {
   return convertFileSrc(`${musicDir}${sep}${track.file}`);
 }
 
-/** Lautstärke für den aktuellen Titel: Regler + Pegelausgleich des Titels */
+const musicSettings = () => useData.getState().data.settings.music;
+
+/** Player-Lautstärke laut Regler (der Pegelausgleich kommt je Titel dazu) */
 function targetVolume() {
-  return localVolumeFor(currentLocalTrack(), useData.getState().data.settings.music);
+  return faderTarget(musicSettings());
 }
 
-function createAudio(): HTMLAudioElement {
+function deckTrack(el: HTMLAudioElement): LocalTrack | undefined {
+  const id = deckTracks.get(el);
+  return id ? useData.getState().data.tracks.find((t) => t.id === id) : undefined;
+}
+
+/** Lautstärke eines Decks anwenden: Fader × Pegelausgleich des Titels. */
+function applyDeck(el: HTMLAudioElement, smoothSeconds = 0) {
+  const out = outputGain(faders.get(el) ?? 0, deckTrack(el), musicSettings());
+  const chain = chains.get(el);
+  if (chain) {
+    el.volume = 1;
+    const param = chain.gain.gain;
+    param.setTargetAtTime(out, chain.gain.context.currentTime, smoothSeconds > 0 ? smoothSeconds / 3 : 0.01);
+  } else {
+    el.volume = Math.min(1, out);
+  }
+}
+
+function getFader(el: HTMLAudioElement) {
+  return faders.get(el) ?? 0;
+}
+
+function setFader(el: HTMLAudioElement, v: number) {
+  faders.set(el, Math.max(0, Math.min(1, v)));
+  applyDeck(el);
+}
+
+/** Hängt ein Deck an Web Audio. Muss vor dem ersten Laden passieren. */
+function attachChain(el: HTMLAudioElement) {
+  if (!isTauri || !webAudioOk || typeof AudioContext === "undefined") return;
+  try {
+    el.crossOrigin = "anonymous";
+    const ac = audioContext();
+    const source = ac.createMediaElementSource(el);
+    const gain = ac.createGain();
+    gain.gain.value = 0;
+    source.connect(gain);
+    gain.connect(ac.destination);
+    chains.set(el, { source, gain });
+  } catch {
+    webAudioOk = false;
+  }
+}
+
+function detachChain(el: HTMLAudioElement) {
+  const chain = chains.get(el);
+  if (!chain) return;
+  try {
+    chain.source.disconnect();
+    chain.gain.disconnect();
+  } catch {
+    /* schon getrennt */
+  }
+  chains.delete(el);
+}
+
+/** Abspielen; läuft die Audio-Ausgabe nicht an, geht es ohne Web Audio weiter. */
+async function playEl(el: HTMLAudioElement): Promise<void> {
+  wantsPlay.add(el);
+  if (chains.has(el)) {
+    const ac = audioContext();
+    if (ac.state !== "running") {
+      await Promise.race([ac.resume().catch(() => {}), new Promise((r) => setTimeout(r, 400))]);
+    }
+    if (ac.state !== "running" && el === audio) {
+      switchToPlainDeck(el, true);
+      return;
+    }
+  }
+  await el.play();
+}
+
+function createAudio(plain = false): HTMLAudioElement {
   const el = new Audio();
   el.preload = "auto";
+  if (!plain) attachChain(el);
   el.addEventListener("timeupdate", () => {
     if (el === audio) useLocalPlayer.setState({ position: el.currentTime });
   });
@@ -80,17 +170,48 @@ function createAudio(): HTMLAudioElement {
     const s = useLocalPlayer.getState();
     if (s.repeat === "one") {
       el.currentTime = 0;
-      void el.play();
+      void playEl(el).catch(() => {});
     } else {
       advance(1, true);
     }
   });
   el.addEventListener("error", () => {
-    if (el === audio && el.getAttribute("src")) {
-      useLocalPlayer.setState({ error: "Titel konnte nicht abgespielt werden.", playing: false });
+    if (el !== audio || !el.getAttribute("src")) return;
+    // Mit Web Audio nicht ladbar? Dann einmal ohne versuchen.
+    if (chains.has(el)) {
+      switchToPlainDeck(el, wantsPlay.has(el));
+      return;
     }
+    useLocalPlayer.setState({ error: "Titel konnte nicht abgespielt werden.", playing: false });
   });
   return el;
+}
+
+/**
+ * Ersetzt ein Web-Audio-Deck durch ein einfaches Audio-Element (gleicher Titel,
+ * gleiche Stelle). Klappt das, bleibt Fokus für diese Sitzung dabei.
+ */
+function switchToPlainDeck(failed: HTMLAudioElement, play: boolean) {
+  const s = useLocalPlayer.getState();
+  const position = failed.currentTime || 0;
+  const fader = getFader(failed);
+  stopRamp(failed);
+  failed.pause();
+  failed.removeAttribute("src");
+  detachChain(failed);
+  const el = createAudio(true);
+  audio = el;
+  el.addEventListener("loadedmetadata", () => (webAudioOk = false), { once: true });
+  if (!loadInto(el, s.index)) return;
+  setFader(el, fader || targetVolume());
+  if (position > 0) el.currentTime = position;
+  if (play) {
+    wantsPlay.add(el);
+    void el
+      .play()
+      .then(() => useLocalPlayer.setState({ playing: true }))
+      .catch(() => useLocalPlayer.setState({ playing: false }));
+  }
 }
 
 function getAudio(): HTMLAudioElement {
@@ -110,17 +231,17 @@ function stopRamp(el: HTMLAudioElement) {
 function ramp(el: HTMLAudioElement, to: number, seconds: number, done?: () => void) {
   stopRamp(el);
   if (seconds <= 0) {
-    el.volume = to;
+    setFader(el, to);
     done?.();
     return;
   }
-  const from = el.volume;
+  const from = getFader(el);
   const start = performance.now();
   ramps.set(
     el,
     setInterval(() => {
       const t = Math.min(1, (performance.now() - start) / (seconds * 1000));
-      el.volume = Math.max(0, Math.min(1, from + (to - from) * t));
+      setFader(el, from + (to - from) * t);
       if (t >= 1) {
         stopRamp(el);
         done?.();
@@ -143,6 +264,7 @@ function retire(el: HTMLAudioElement, seconds: number) {
     el.pause();
     el.removeAttribute("src");
     el.load();
+    detachChain(el);
   };
   if (el.paused || seconds <= 0) {
     stopRamp(el);
@@ -162,6 +284,7 @@ function loadInto(el: HTMLAudioElement, index: number): boolean {
     useLocalPlayer.setState({ error: "Musik lässt sich nur in der Desktop-App abspielen." });
     return false;
   }
+  deckTracks.set(el, track.id);
   el.src = url;
   useLocalPlayer.setState({ index, position: 0, duration: track.duration ?? 0, error: null });
   return true;
@@ -177,11 +300,10 @@ function crossfadeTo(index: number, seconds: number, position = 0) {
   audio = next;
   if (old) retire(old, seconds);
   if (!loadInto(next, index)) return;
-  next.volume = 0;
+  setFader(next, 0);
   const start = () => {
     if (position > 0) next.currentTime = Math.min(position, next.duration || position);
-    void next
-      .play()
+    void playEl(next)
       .then(() => {
         if (audio !== next) return;
         useLocalPlayer.setState({ playing: true });
@@ -202,11 +324,12 @@ function loadIndex(index: number, autoplay: boolean) {
   const a = getAudio();
   stopRamp(a);
   if (!loadInto(a, index)) return;
-  a.volume = targetVolume();
+  setFader(a, targetVolume());
   if (autoplay) {
-    void a
-      .play()
-      .then(() => useLocalPlayer.setState({ playing: true }))
+    void playEl(a)
+      .then(() => {
+        if (audio === a) useLocalPlayer.setState({ playing: true });
+      })
       .catch(() => useLocalPlayer.setState({ playing: false }));
   }
 }
@@ -269,10 +392,10 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
       if (s.queue.length) loadIndex(s.index, true);
       return;
     }
-    a.volume = fade > 0 ? 0 : targetVolume();
-    void a
-      .play()
+    setFader(a, fade > 0 ? 0 : targetVolume());
+    void playEl(a)
       .then(() => {
+        if (audio !== a) return;
         set({ playing: true });
         if (fade > 0) fadeTo(targetVolume(), fade);
       })
@@ -283,9 +406,10 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
     const a = getAudio();
     if (!get().playing) return;
     set({ playing: false });
+    wantsPlay.delete(a);
     fadeTo(0, fade, () => {
       a.pause();
-      a.volume = targetVolume();
+      setFader(a, targetVolume());
     });
   },
 
@@ -338,7 +462,7 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
 export function applyLocalVolume(seconds = 0) {
   // während einer Überblendung nicht dazwischenfunken
   if (!audio || ramps.has(audio)) return;
-  if (audio.paused) audio.volume = targetVolume();
+  if (audio.paused) setFader(audio, targetVolume());
   else ramp(audio, targetVolume(), seconds);
 }
 
@@ -354,10 +478,11 @@ useData.subscribe((d, prev) => {
     m.linkVolume !== pm.linkVolume
   ) {
     applyLocalVolume();
-  } else if (d.data.tracks !== prev.data.tracks) {
-    const t = currentLocalTrack();
+  } else if (d.data.tracks !== prev.data.tracks && audio) {
+    // frisch gemessener Titel: Pegelausgleich weich nachführen
+    const t = deckTrack(audio);
     const before = t && prev.data.tracks.find((x) => x.id === t.id);
-    if (t && before && t.loudness !== before.loudness) applyLocalVolume(1.5);
+    if (t && before && (t.loudness !== before.loudness || t.peak !== before.peak)) applyDeck(audio, 1.5);
   }
 });
 

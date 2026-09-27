@@ -20,9 +20,16 @@ fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
-/// Integrierte Lautheit einer Audiodatei in LUFS.
+/// Messergebnis: integrierte Lautheit (LUFS) und höchster Ausschlag (linear, 1.0 = Vollaussteuerung).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct Measurement {
+    pub lufs: f64,
+    pub peak: f64,
+}
+
+/// Misst Lautheit und Spitzenpegel einer Audiodatei.
 /// `Ok(None)`, wenn die Datei still ist oder ihr Format nicht gelesen werden kann.
-pub fn measure(path: &Path) -> Result<Option<f64>, String> {
+pub fn measure(path: &Path) -> Result<Option<Measurement>, String> {
     let file = File::open(path).map_err(err)?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
@@ -79,7 +86,7 @@ pub fn measure(path: &Path) -> Result<Option<f64>, String> {
         let m = match meter.as_mut() {
             Some(m) => m,
             None => {
-                let mut m = EbuR128::new(channels, spec.rate, Mode::I).map_err(err)?;
+                let mut m = EbuR128::new(channels, spec.rate, Mode::I | Mode::SAMPLE_PEAK).map_err(err)?;
                 if channels == 1 {
                     // Mono wird auf beiden Lautsprechern abgespielt
                     m.set_channel(0, Channel::DualMono).map_err(err)?;
@@ -100,7 +107,17 @@ pub fn measure(path: &Path) -> Result<Option<f64>, String> {
 
     let Some(m) = meter else { return Ok(None) };
     let lufs = m.loudness_global().map_err(err)?;
-    Ok(lufs.is_finite().then_some((lufs * 100.0).round() / 100.0))
+    if !lufs.is_finite() {
+        return Ok(None);
+    }
+    let mut peak: f64 = 0.0;
+    for ch in 0..m.channels() {
+        peak = peak.max(m.sample_peak(ch).map_err(err)?);
+    }
+    Ok(Some(Measurement {
+        lufs: (lufs * 100.0).round() / 100.0,
+        peak: (peak * 10_000.0).round() / 10_000.0,
+    }))
 }
 
 #[cfg(test)]
@@ -147,22 +164,24 @@ mod tests {
         // Stereo-Sinus mit Amplitude 0,1 (−20 dBFS) ergibt −20 LUFS
         let p = temp("stereo.wav");
         sine_wav(&p, 2, 0.1, 5);
-        let l = measure(&p).unwrap().unwrap();
-        assert!((l + 20.0).abs() < 0.2, "gemessen: {l}");
+        let m = measure(&p).unwrap().unwrap();
+        assert!((m.lufs + 20.0).abs() < 0.2, "gemessen: {m:?}");
+        assert!((m.peak - 0.1).abs() < 0.002, "Spitze: {m:?}");
 
         // 6 dB leiser → 6 LU weniger
         let q = temp("leise.wav");
         sine_wav(&q, 2, 0.05, 5);
-        let l2 = measure(&q).unwrap().unwrap();
-        assert!((l - l2 - 6.02).abs() < 0.2, "{l} / {l2}");
+        let m2 = measure(&q).unwrap().unwrap();
+        assert!((m.lufs - m2.lufs - 6.02).abs() < 0.2, "{m:?} / {m2:?}");
+        assert!((m2.peak - 0.05).abs() < 0.002, "Spitze: {m2:?}");
     }
 
     #[test]
     fn mono_counts_like_both_speakers() {
         let p = temp("mono.wav");
         sine_wav(&p, 1, 0.1, 5);
-        let l = measure(&p).unwrap().unwrap();
-        assert!((l + 20.0).abs() < 0.2, "gemessen: {l}");
+        let m = measure(&p).unwrap().unwrap();
+        assert!((m.lufs + 20.0).abs() < 0.2, "gemessen: {m:?}");
     }
 
     #[test]
@@ -184,6 +203,6 @@ mod tests {
         let Ok(p) = std::env::var("FOKUS_BENCH_FILE") else { return };
         let start = std::time::Instant::now();
         let l = measure(Path::new(&p)).unwrap();
-        println!("{p}: {l:?} LUFS in {:?}", start.elapsed());
+        println!("{p}: {l:?} in {:?}", start.elapsed());
     }
 }

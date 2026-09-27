@@ -5,6 +5,7 @@ import {
   ListMusic,
   Music2,
   Pause,
+  Pencil,
   Play,
   Plus,
   Repeat,
@@ -25,6 +26,8 @@ import type { ID, LocalTrack } from "../../store/types";
 import { chooseBreakSource, chooseFocusSource, chooseLocalBreakMusic, chooseLocalFocusMusic, ensureFocusMusicDefault } from "./focusMusic";
 import { currentLocalTrack, playlistTrackIds, stopIfTrackRemoved, useLocalPlayer } from "./localPlayer";
 import { setMusicVolume } from "./volumeControl";
+import { needsMeasurement, useLoudnessScan } from "./loudnessScan";
+import { appliedCorrectionDb, formatDb, isBoostLimited } from "./volume";
 
 interface ImportedTrack {
   id: string;
@@ -88,7 +91,10 @@ export function LocalMusic() {
   const remove = useData((s) => s.remove);
   const [selected, setSelected] = useState<ID | null>(null);
   const [newName, setNewName] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const measuringId = useLoudnessScan((s) => s.currentId);
   const player = useLocalPlayer();
   const current = player.queue[player.index];
   const music = useSettings().music;
@@ -153,6 +159,22 @@ export function LocalMusic() {
     }
   };
 
+  // beim Wechsel der Playlist das Umbenennen abbrechen
+  useEffect(() => setRenaming(false), [selected]);
+
+  const startRename = () => {
+    if (!playlist) return;
+    setDraftName(playlist.name);
+    setRenaming(true);
+  };
+
+  const saveRename = () => {
+    if (!renaming || !playlist) return;
+    const name = draftName.trim();
+    if (name && name !== playlist.name) patch("playlists", playlist.id, { name });
+    setRenaming(false);
+  };
+
   const deletePlaylist = async () => {
     if (!playlist) return;
     if (!(await confirmDanger("Playlist löschen?", `„${playlist.name}“ wird gelöscht. Die Titel bleiben erhalten.`))) return;
@@ -169,7 +191,17 @@ export function LocalMusic() {
           <span className="tiny faint">{tracks.length}</span>
         </button>
         {playlists.map((p) => (
-          <button key={p.id} className={`list-item pl-item ${selected === p.id ? "selected" : ""}`} onClick={() => setSelected(p.id)}>
+          <button
+            key={p.id}
+            className={`list-item pl-item ${selected === p.id ? "selected" : ""}`}
+            onClick={() => setSelected(p.id)}
+            onDoubleClick={() => {
+              setSelected(p.id);
+              setDraftName(p.name);
+              setTimeout(() => setRenaming(true), 0);
+            }}
+            title="Doppelklick zum Umbenennen"
+          >
             <ListMusic size={16} />
             <span className="grow ellipsis">{p.name}</span>
             <span className="tiny faint">{p.trackIds.length}</span>
@@ -201,8 +233,33 @@ export function LocalMusic() {
             >
               {player.playing && player.playlistId === selected ? <Pause size={18} /> : <Play size={18} style={{ marginLeft: 2 }} />}
             </button>
-            <div className="col" style={{ gap: 0 }}>
-              <h2>{playlist ? playlist.name : "Alle Titel"}</h2>
+            <div className="col" style={{ gap: 0, minWidth: 0 }}>
+              {playlist && renaming ? (
+                <input
+                  className="input playlist-name-input"
+                  autoFocus
+                  value={draftName}
+                  aria-label="Name der Playlist"
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  onBlur={saveRename}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveRename();
+                    if (e.key === "Escape") {
+                      e.stopPropagation();
+                      setRenaming(false);
+                    }
+                  }}
+                />
+              ) : (
+                <h2
+                  className={playlist ? "renamable" : undefined}
+                  onDoubleClick={startRename}
+                  title={playlist ? "Doppelklick zum Umbenennen" : undefined}
+                >
+                  {playlist ? playlist.name : "Alle Titel"}
+                </h2>
+              )}
               <span className="tiny faint">
                 {list.length} Titel · {fmtSeconds(list.reduce((a, t) => a + (t.duration ?? 0), 0))}
               </span>
@@ -230,6 +287,11 @@ export function LocalMusic() {
             <button className="btn" onClick={() => void addFiles()}>
               <FolderPlus size={15} /> Dateien hinzufügen
             </button>
+            {playlist && (
+              <button className="icon-btn" onClick={startRename} title="Playlist umbenennen">
+                <Pencil size={16} />
+              </button>
+            )}
             {playlist && (
               <button className="icon-btn" onClick={() => void deletePlaylist()} title="Playlist löschen">
                 <Trash2 size={16} />
@@ -264,6 +326,11 @@ export function LocalMusic() {
                 <th>Titel</th>
                 <th>Interpret</th>
                 <th style={{ width: 60 }}>Dauer</th>
+                {music.normalize && (
+                  <th style={{ width: 72 }} title="Korrektur durch den Pegelausgleich">
+                    Pegel
+                  </th>
+                )}
                 <th style={{ width: 150 }} />
               </tr>
             </thead>
@@ -284,6 +351,7 @@ export function LocalMusic() {
                     {t.artist ?? "–"}
                   </td>
                   <td className="muted tabular">{fmtSeconds(t.duration)}</td>
+                  {music.normalize && <LevelCell track={t} measuring={measuringId === t.id} music={music} />}
                   <td>
                     <div className="row gap-4" style={{ justifyContent: "flex-end" }}>
                       <button className="icon-btn sm" onClick={() => player.playQueue(list.map((x) => x.id), i, selected)} title="Abspielen">
@@ -344,6 +412,37 @@ export function LocalMusic() {
 
       <LocalPlayerBar />
     </div>
+  );
+}
+
+/** Korrektur des Pegelausgleichs für einen Titel, mit Messwerten im Tooltip */
+function LevelCell({ track, measuring, music }: { track: LocalTrack; measuring: boolean; music: ReturnType<typeof useSettings>["music"] }) {
+  if (needsMeasurement(track)) {
+    return <td className="tiny faint">{measuring ? "misst …" : "…"}</td>;
+  }
+  if (track.loudness === null || typeof track.loudness !== "number") {
+    return (
+      <td className="tiny faint" title="Dieses Format lässt sich nicht messen – der Titel läuft in Originallautstärke.">
+        –
+      </td>
+    );
+  }
+  const correction = appliedCorrectionDb(track, music) ?? 0;
+  const limited = isBoostLimited(track, music);
+  const peakDb = typeof track.peak === "number" && track.peak > 0 ? 20 * Math.log10(track.peak) : null;
+  const fmt = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).replace("-", "−");
+  const title = [
+    `Gemessen: ${fmt(track.loudness)} LUFS`,
+    peakDb !== null ? `Spitze: ${fmt(peakDb)} dBFS` : null,
+    `Korrektur: ${formatDb(correction)}`,
+    limited ? "Wird wegen des Übersteuerungsschutzes nicht ganz angehoben." : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <td className={`tiny tabular level-cell ${limited ? "limited" : "muted"}`} title={title}>
+      {formatDb(correction)}
+    </td>
   );
 }
 

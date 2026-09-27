@@ -583,9 +583,12 @@ pub fn music_delete(state: State<'_, StorageState>, file: String) -> Result<(), 
     Ok(())
 }
 
-/// Misst die Lautheit eines Titels im Musikordner (LUFS; `None`, wenn nicht messbar).
+/// Misst Lautheit (LUFS) und Spitzenpegel eines Titels im Musikordner (`None`, wenn nicht messbar).
 #[tauri::command]
-pub async fn music_loudness(state: State<'_, StorageState>, file: String) -> Result<Option<f64>, String> {
+pub async fn music_loudness(
+    state: State<'_, StorageState>,
+    file: String,
+) -> Result<Option<crate::loudness::Measurement>, String> {
     let name = safe_file_name(&file)?.to_string();
     let path = current_dir(&state)?.join(MUSIC_DIR).join(name);
     if !path.is_file() {
