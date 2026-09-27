@@ -21,6 +21,34 @@ export interface PhaseEndInfo {
   to: Phase;
   natural: boolean;
   sessionId: ID | null;
+  /** alle Einheiten des Durchgangs geschafft – Timer wartet */
+  roundComplete: boolean;
+}
+
+type TimerSettings = ReturnType<typeof useData.getState>["data"]["settings"]["timer"];
+
+export interface NextStep {
+  next: Phase;
+  autoStart: boolean;
+  cycle: number;
+  roundComplete: boolean;
+}
+
+/**
+ * Was nach einer Phase kommt. `cycle` = geschaffte Lerneinheiten inklusive der
+ * gerade beendeten. Innerhalb eines Durchgangs laufen die Phasen automatisch
+ * weiter; nach der letzten Einheit folgt (falls eingestellt) die lange Pause,
+ * danach stoppt der Timer.
+ */
+export function planNext(from: Phase, cycle: number, t: TimerSettings): NextStep {
+  const units = t.longEvery;
+  if (from === "focus") {
+    if (units <= 0 || cycle < units) return { next: "short", autoStart: t.autoContinue, cycle, roundComplete: false };
+    if (t.longBreak > 0) return { next: "long", autoStart: t.autoContinue, cycle, roundComplete: false };
+    return { next: "focus", autoStart: false, cycle: 0, roundComplete: true };
+  }
+  if (from === "long") return { next: "focus", autoStart: false, cycle: 0, roundComplete: true };
+  return { next: "focus", autoStart: t.autoContinue, cycle, roundComplete: false };
 }
 
 interface TimerState {
@@ -40,6 +68,8 @@ interface TimerState {
   reflectionId: ID | null;
   mini: boolean;
   lastEnd: PhaseEndInfo | null;
+  /** zuletzt beendeter Durchgang ist komplett (bis zum nächsten Start) */
+  roundComplete: boolean;
 
   start(): void;
   pause(): void;
@@ -99,6 +129,7 @@ export const useTimer = create<TimerState>()((set, get) => ({
   reflectionId: null,
   mini: false,
   lastEnd: null,
+  roundComplete: false,
 
   start() {
     const s = get();
@@ -111,6 +142,7 @@ export const useTimer = create<TimerState>()((set, get) => ({
       phaseStartedAt: now,
       runningSince: now,
       focusedMs: 0,
+      roundComplete: false,
     });
   },
 
@@ -150,9 +182,12 @@ export const useTimer = create<TimerState>()((set, get) => ({
     const now = Date.now();
     if (s.phase === "focus" && s.status !== "idle") recordSession(s, now, false);
     const dur = phaseMinutes("focus") * MINUTE;
+    // „Beenden“ beendet den ganzen Durchgang – der nächste Start beginnt bei Einheit 1
     set({
       phase: "focus",
       status: "idle",
+      cycle: 0,
+      roundComplete: false,
       durationMs: dur,
       remainingMs: dur,
       endsAt: null,
@@ -167,37 +202,31 @@ export const useTimer = create<TimerState>()((set, get) => ({
     const now = Date.now();
     const settings = useData.getState().data.settings.timer;
     let sessionId: ID | null = null;
-    let next: Phase;
     let cycle = s.cycle;
-    let autoStart: boolean;
 
     if (s.phase === "focus") {
       const focused = focusedNow(s, now);
       const counts = natural || focused >= s.durationMs * 0.8;
       if (s.status !== "idle" || natural) sessionId = recordSession(s, now, counts);
       if (counts) cycle += 1;
-      next = settings.longEvery > 0 && cycle >= settings.longEvery ? "long" : "short";
-      autoStart = settings.autoStartBreak;
-    } else {
-      if (s.phase === "long") cycle = 0;
-      next = "focus";
-      autoStart = settings.autoStartFocus;
     }
+    const step = planNext(s.phase, cycle, settings);
 
-    const dur = phaseMinutes(next) * MINUTE;
+    const dur = phaseMinutes(step.next) * MINUTE;
     const reflect = natural && s.phase === "focus" && settings.reflection && sessionId !== null;
     set({
-      phase: next,
-      cycle,
+      phase: step.next,
+      cycle: step.cycle,
       durationMs: dur,
       remainingMs: dur,
-      status: autoStart ? "running" : "idle",
-      endsAt: autoStart ? now + dur : null,
-      phaseStartedAt: autoStart ? now : null,
-      runningSince: autoStart ? now : null,
+      status: step.autoStart ? "running" : "idle",
+      endsAt: step.autoStart ? now + dur : null,
+      phaseStartedAt: step.autoStart ? now : null,
+      runningSince: step.autoStart ? now : null,
       focusedMs: 0,
       reflectionId: reflect ? sessionId : s.reflectionId,
-      lastEnd: { from: s.phase, to: next, natural, sessionId },
+      roundComplete: step.roundComplete,
+      lastEnd: { from: s.phase, to: step.next, natural, sessionId, roundComplete: step.roundComplete },
     });
   },
 
@@ -255,4 +284,27 @@ export function spaceToggleHandler(e: KeyboardEvent) {
   if (document.querySelector(".modal-backdrop")) return;
   e.preventDefault();
   useTimer.getState().toggle();
+}
+
+/**
+ * Uhrzeit, zu der die letzte Lerneinheit des Durchgangs endet (null, wenn der
+ * Durchgang ohne Ende läuft oder die Phasen nicht automatisch weiterlaufen).
+ */
+export function roundFinishAt(
+  s: Pick<TimerState, "phase" | "status" | "cycle" | "endsAt" | "remainingMs">,
+  t: TimerSettings,
+  now = Date.now(),
+): number | null {
+  const units = t.longEvery;
+  if (units <= 0 || !t.autoContinue || s.phase === "long") return null;
+  const rem = remainingNow(s, now);
+  const focus = t.focus * MINUTE;
+  const short = t.shortBreak * MINUTE;
+  if (s.phase === "focus") {
+    const left = Math.max(0, units - (s.cycle + 1));
+    return now + rem + left * (short + focus);
+  }
+  const left = Math.max(0, units - s.cycle);
+  if (left === 0) return null;
+  return now + rem + left * focus + (left - 1) * short;
 }

@@ -177,11 +177,11 @@ function TimerSection() {
       <Row title={<span className="row gap-4"><Bell size={14} /> Windows-Benachrichtigungen</span>} desc="Auch wenn Fokus minimiert ist.">
         <Switch checked={t.notifications} onChange={(v) => set("timer", { notifications: v })} />
       </Row>
-      <Row title="Pausen automatisch starten">
-        <Switch checked={t.autoStartBreak} onChange={(v) => set("timer", { autoStartBreak: v })} />
-      </Row>
-      <Row title="Lernphasen automatisch starten" desc="Sonst startest du nach der Pause selbst – oft die bessere Wahl.">
-        <Switch checked={t.autoStartFocus} onChange={(v) => set("timer", { autoStartFocus: v })} />
+      <Row
+        title="Phasen automatisch nacheinander starten"
+        desc="Lernphasen und Pausen laufen ohne Klick weiter, bis alle Einheiten eines Durchgangs geschafft sind. Danach wartet der Timer."
+      >
+        <Switch checked={t.autoContinue} onChange={(v) => set("timer", { autoContinue: v })} />
       </Row>
       <Row title="Reflexion nach jeder Lernphase" desc="Kurze Frage nach Konzentration und Ergebnis – Grundlage für die Statistik „beste Lernzeit“.">
         <Switch checked={t.reflection} onChange={(v) => set("timer", { reflection: v })} />

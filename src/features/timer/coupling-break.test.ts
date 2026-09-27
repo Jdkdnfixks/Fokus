@@ -52,7 +52,7 @@ function setup(music: Partial<ReturnType<typeof useData.getState>["data"]["setti
       ],
       settings: {
         ...s.data.settings,
-        timer: { ...s.data.settings.timer, autoStartBreak: true, autoStartFocus: false },
+        timer: { ...s.data.settings.timer, autoContinue: true, longEvery: 3, longBreak: 30 },
         music: { ...s.data.settings.music, couple: true, sourceChosen: true, ...music },
       },
     },
@@ -97,16 +97,33 @@ describe("Pausenmusik", () => {
     expect(player.snapshot).toHaveBeenCalled();
     expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause", FADE);
 
-    // Pause vorbei (übersprungen) → Timer wartet → Pausenmusik stoppt
-    useTimer.getState().skip();
+    // Pause vorbei → nächste Lernphase startet automatisch → Lernmusik an der gemerkten Stelle
+    useTimer.getState().finishPhase(true);
     await settle();
-    expect(player.pause).toHaveBeenCalled();
-
-    // nächste Lernphase → Lernmusik an der gemerkten Stelle (mit Überblendung)
-    useTimer.getState().start();
-    await settle();
+    expect(useTimer.getState().phase).toBe("focus");
+    expect(useTimer.getState().status).toBe("running");
     expect(player.restore).toHaveBeenCalledWith(expect.objectContaining({ position: 123, playlistId: "lern" }), FADE);
     expect(player.playQueue).toHaveBeenCalledTimes(2);
+  });
+
+  it("ohne automatischen Ablauf: Pause endet, Timer wartet, Pausenmusik stoppt", async () => {
+    const player = setup({ focusSource: "local", localPlaylistId: "lern", breakSource: "local", breakLocalPlaylistId: "pause" });
+    useData.setState((s) => ({
+      data: { ...s.data, settings: { ...s.data.settings, timer: { ...s.data.settings.timer, autoContinue: false } } },
+    }));
+    useTimer.getState().start();
+    useTimer.getState().finishPhase(true);
+    expect(useTimer.getState().status).toBe("idle");
+    useTimer.getState().start(); // Pause per Klick
+    await settle();
+    expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause", FADE);
+    useTimer.getState().finishPhase(true);
+    await settle();
+    expect(useTimer.getState().status).toBe("idle");
+    expect(player.pause).toHaveBeenCalled();
+    useTimer.getState().start();
+    await settle();
+    expect(player.restore).toHaveBeenCalled();
   });
 
   it("Pause angehalten und fortgesetzt: Pausenmusik pausiert und läuft weiter", async () => {
@@ -135,8 +152,7 @@ describe("Pausenmusik", () => {
     expect(spotify.spotifyFadeOutAndPause).toHaveBeenCalledWith(FADE);
     expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause", FADE);
 
-    useTimer.getState().skip();
-    useTimer.getState().start();
+    useTimer.getState().finishPhase(true); // Pause vorbei → Lernphase startet automatisch
     await settle();
     // gleiche Playlist war nur pausiert → fortsetzen statt neu starten
     expect(spotify.spotifyPlayFadeIn).toHaveBeenLastCalledWith(null, FADE);
@@ -155,8 +171,7 @@ describe("Pausenmusik", () => {
     await settle();
     expect(spotify.spotifySwitch).toHaveBeenLastCalledWith("spotify:playlist:pause", FADE);
 
-    useTimer.getState().skip();
-    useTimer.getState().start();
+    useTimer.getState().finishPhase(true);
     await settle();
     expect(spotify.spotifyRestore).toHaveBeenCalledWith(expect.objectContaining({ trackUri: "spotify:track:x", positionMs: 90_000 }), FADE);
   });
@@ -187,6 +202,22 @@ describe("Überblendung vor dem Phasenende", () => {
     expect(player.playQueue).toHaveBeenCalledTimes(2); // Lernmusik + Pausenmusik, kein zweiter Start
   });
 
+  it("blendet die Musik nach der letzten Einheit zum Ende des Durchgangs aus", async () => {
+    const player = setup({ focusSource: "local", localPlaylistId: "lern", breakSource: "local", breakLocalPlaylistId: "pause" });
+    useData.setState((s) => ({
+      data: { ...s.data, settings: { ...s.data.settings, timer: { ...s.data.settings.timer, longEvery: 1, longBreak: 0 } } },
+    }));
+    useTimer.getState().start();
+    await settle();
+    await coupling.onPhaseEnding(); // letzte Einheit, keine lange Pause → keine Pausenmusik, nur ausblenden
+    expect(player.pause).toHaveBeenCalledWith(FADE);
+    expect(player.playQueue).toHaveBeenCalledTimes(1);
+    useTimer.getState().finishPhase(true);
+    await settle();
+    expect(useTimer.getState().status).toBe("idle");
+    expect(useTimer.getState().roundComplete).toBe(true);
+  });
+
   it("blendet die Lernmusik vor einer stillen Pause schon vor dem Ende aus", async () => {
     const player = setup({ focusSource: "local", localPlaylistId: "lern", breakSource: "pause" });
     useTimer.getState().start();
@@ -197,9 +228,6 @@ describe("Überblendung vor dem Phasenende", () => {
 
   it("überblendet am Ende der Pause zurück zur Lernmusik, wenn die Lernphase automatisch startet", async () => {
     const player = setup({ focusSource: "local", localPlaylistId: "lern", breakSource: "local", breakLocalPlaylistId: "pause" });
-    useData.setState((s) => ({
-      data: { ...s.data, settings: { ...s.data.settings, timer: { ...s.data.settings.timer, autoStartFocus: true } } },
-    }));
     useTimer.getState().start();
     await settle();
     useTimer.getState().finishPhase(true); // → Pause mit Pausenmusik

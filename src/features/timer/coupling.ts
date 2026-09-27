@@ -12,7 +12,7 @@ import {
   useSpotify,
   type SpotifySnapshot,
 } from "../music/spotify";
-import { useTimer } from "./timerStore";
+import { planNext, useTimer } from "./timerStore";
 
 /**
  * Verknüpft den Timer mit Musik, Geräuschen und dem Website-Blocker:
@@ -177,23 +177,28 @@ export async function onPhaseEnding() {
   const fade = music.fadeSeconds;
   if (!music.couple || t.status !== "running" || fade <= 0) return;
   const fKind = focusKind(music);
+  // Was kommt als Nächstes – startet es automatisch? (reguläres Phasenende angenommen)
+  const step = planNext(t.phase, t.phase === "focus" ? t.cycle + 1 : t.cycle, settings.timer);
 
   if (t.phase === "focus") {
-    if (music.breakSource === "continue") return;
     const bKind = breakKind(music);
-    if (bKind && settings.timer.autoStartBreak) {
-      preTransition = "break";
-      await enterBreak(bKind, fKind, music, fade);
-      active = { role: "break", kind: bKind };
-    } else {
-      // keine Pausenmusik (oder Pause startet erst per Klick): Lernmusik ausklingen lassen
-      await pauseKind(active?.kind ?? fKind, fade);
+    if (step.next !== "focus" && step.autoStart) {
+      if (music.breakSource === "continue") return;
+      if (bKind) {
+        preTransition = "break";
+        await enterBreak(bKind, fKind, music, fade);
+        active = { role: "break", kind: bKind };
+        return;
+      }
     }
+    // keine Pausenmusik, Pause startet erst per Klick oder der Durchgang ist fertig:
+    // Lernmusik zum Phasenende ausklingen lassen
+    await pauseKind(active?.kind ?? fKind, fade);
     return;
   }
 
   // Pause endet
-  if (settings.timer.autoStartFocus) {
+  if (step.autoStart) {
     preTransition = "focus";
     if (active?.role === "break") {
       const restored = await leaveBreak(active.kind, fKind, fade, music);
@@ -202,9 +207,9 @@ export async function onPhaseEnding() {
     } else if (music.breakSource !== "continue") {
       await startFocusMusic(fKind, music, fade);
     }
-  } else if (active?.role === "break") {
-    // Lernphase startet erst per Klick: Pausenmusik ausklingen lassen
-    await pauseKind(active.kind, fade);
+  } else {
+    // Lernphase startet erst per Klick bzw. Durchgang ist fertig: Musik ausklingen lassen
+    await pauseKind(active?.kind ?? (music.breakSource === "continue" ? fKind : null), fade);
   }
 }
 

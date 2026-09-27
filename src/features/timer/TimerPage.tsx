@@ -30,7 +30,7 @@ import { TaskRow } from "../tasks/TaskRow";
 import { setMiniMode } from "./mini";
 import { TimerRing } from "./TimerRing";
 import { WelcomeCard } from "./WelcomeCard";
-import { PHASE_LABEL, remainingNow, spaceToggleHandler, useTimer, type Phase } from "./timerStore";
+import { PHASE_LABEL, remainingNow, roundFinishAt, spaceToggleHandler, useTimer, type Phase } from "./timerStore";
 
 export const PHASE_COLOR: Record<Phase, string> = {
   focus: "var(--accent)",
@@ -65,15 +65,27 @@ function TimerCard() {
   const remaining = remainingNow(t, now);
   const progress = t.durationMs ? 1 - remaining / t.durationMs : 0;
   const longEvery = settings.timer.longEvery;
+  const finishAt = t.status === "idle" ? null : roundFinishAt(t, settings.timer, now);
 
   const statusLine =
     t.status === "running"
       ? `läuft · endet um ${fmtTime(new Date(t.endsAt ?? now))}`
       : t.status === "paused"
         ? "pausiert"
-        : t.phase === "focus"
-          ? "bereit, wenn du es bist"
-          : "Pause bereit";
+        : t.roundComplete
+          ? "Durchgang geschafft!"
+          : t.phase === "focus"
+            ? "bereit, wenn du es bist"
+            : "Pause bereit";
+
+  const unitLine =
+    longEvery > 0
+      ? t.phase === "focus"
+        ? `Einheit ${Math.min(t.cycle + 1, longEvery)} von ${longEvery}`
+        : t.phase === "short"
+          ? `nach Einheit ${t.cycle} von ${longEvery}`
+          : `alle ${longEvery} Einheiten geschafft`
+      : null;
 
   return (
     <section className="card timer-card">
@@ -105,16 +117,22 @@ function TimerCard() {
           <span className="timer-time tabular">{fmtClock(remaining)}</span>
           <span className="timer-status">{statusLine}</span>
           {longEvery > 0 && (
-            <span className="cycle-dots" title={`${t.cycle} von ${longEvery} Lernphasen bis zur langen Pause`}>
+            <span className="cycle-dots" title={`${t.cycle} von ${longEvery} Lerneinheiten dieses Durchgangs geschafft`}>
               {Array.from({ length: longEvery }, (_, i) => (
-                <span key={i} className={i < t.cycle ? "on" : ""} />
+                <span key={i} className={i < t.cycle ? "on" : t.phase === "focus" && i === t.cycle && t.status !== "idle" ? "now" : ""} />
               ))}
+            </span>
+          )}
+          {unitLine && !t.roundComplete && (
+            <span className="unit-line">
+              {unitLine}
+              {finishAt ? ` · fertig gegen ${fmtTime(new Date(finishAt))}` : ""}
             </span>
           )}
         </TimerRing>
 
         <div className="timer-controls">
-          <button className="icon-btn lg bordered" onClick={t.stop} disabled={t.status === "idle"} title="Beenden">
+          <button className="icon-btn lg bordered" onClick={t.stop} disabled={t.status === "idle" && t.cycle === 0} title="Durchgang beenden">
             <Square size={16} />
           </button>
           <button className="play-btn" onClick={t.toggle} style={{ background: PHASE_COLOR[t.phase] }}>
@@ -157,11 +175,12 @@ function PresetBar() {
             title={p.name}
           >
             {p.focus}/{p.shortBreak}
+            {p.longEvery > 0 && <span className="faint">×{p.longEvery}</span>}
           </button>
         ))}
         <button className={`chip ${custom || open ? "active" : ""}`} onClick={() => setOpen(!open)}>
           <Settings2 size={13} />
-          {custom ? `${timer.focus}/${timer.shortBreak}` : "Eigene"}
+          {custom ? `${timer.focus}/${timer.shortBreak}${timer.longEvery > 0 ? ` ×${timer.longEvery}` : ""}` : "Eigene"}
         </button>
       </div>
       {open && (
@@ -175,13 +194,33 @@ function PresetBar() {
             <Stepper value={timer.shortBreak} min={1} max={60} suffix=" min" onChange={(v) => setTimer({ shortBreak: v })} />
           </div>
           <div className="field">
-            <span className="field-label">Lange Pause</span>
-            <Stepper value={timer.longBreak} min={5} max={90} step={5} suffix=" min" onChange={(v) => setTimer({ longBreak: v })} />
+            <span className="field-label">Einheiten</span>
+            <Stepper
+              value={timer.longEvery}
+              min={0}
+              max={12}
+              onChange={(v) => setTimer({ longEvery: v })}
+              display={(v) => (v === 0 ? "∞" : `${v}×`)}
+            />
           </div>
           <div className="field">
-            <span className="field-label">Einheiten bis zur langen Pause</span>
-            <Stepper value={timer.longEvery} min={0} max={8} onChange={(v) => setTimer({ longEvery: v })} />
+            <span className="field-label">Lange Pause am Ende</span>
+            <Stepper
+              value={timer.longBreak}
+              min={0}
+              max={90}
+              step={5}
+              onChange={(v) => setTimer({ longBreak: v })}
+              display={(v) => (v === 0 ? "keine" : `${v} min`)}
+            />
           </div>
+          <p className="tiny faint preset-hint">
+            {timer.longEvery > 0
+              ? `Ein Durchgang: ${timer.longEvery} × ${timer.focus} Min lernen mit ${timer.shortBreak} Min Pause dazwischen${
+                  timer.longBreak > 0 ? `, danach ${timer.longBreak} Min lange Pause` : ""
+                }. ${timer.autoContinue ? "Alles läuft automatisch, danach stoppt der Timer." : ""}`
+              : `Ohne Ende: ${timer.focus} Min lernen, ${timer.shortBreak} Min Pause – bis du den Timer stoppst.`}
+          </p>
         </div>
       )}
     </div>

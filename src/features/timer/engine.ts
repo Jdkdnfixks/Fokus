@@ -92,19 +92,37 @@ function syncBackend() {
 function onPhaseEnd(info: PhaseEndInfo) {
   if (!info.natural) return;
   const t = useData.getState().data.settings.timer;
-  playChime(t.sound, t.soundVolume, info.from === "focus" ? "down" : "up");
+  const timer = useTimer.getState();
+  playChime(t.sound, t.soundVolume, info.from === "focus" && !info.roundComplete ? "down" : "up");
   if (!t.notifications) return;
 
+  const units = t.longEvery;
+  if (info.roundComplete) {
+    void notify(
+      "Durchgang geschafft!",
+      units > 0
+        ? `${units} ${units === 1 ? "Lerneinheit" : "Lerneinheiten"} à ${t.focus} Min erledigt. Starte den nächsten Durchgang, wenn du bereit bist.`
+        : "Starte den nächsten Durchgang, wenn du bereit bist.",
+    );
+    return;
+  }
+  const running = timer.status === "running";
   if (info.from === "focus") {
     const mins = info.to === "long" ? t.longBreak : t.shortBreak;
+    const unitText = units > 0 ? ` (Einheit ${timer.cycle} von ${units})` : "";
     void notify(
-      "Lernphase geschafft",
-      info.to === "long" ? `Zeit für eine lange Pause (${mins} Min). Gut gemacht!` : `Kurze Pause: ${mins} Min. Steh kurz auf und trink etwas.`,
+      `Lernphase geschafft${unitText}`,
+      info.to === "long"
+        ? `Letzte Einheit geschafft – jetzt ${mins} Min lange Pause.`
+        : running
+          ? `Kurze Pause: ${mins} Min. Steh kurz auf und trink etwas.`
+          : `Starte die Pause (${mins} Min), wenn du so weit bist.`,
     );
   } else {
+    const unitText = units > 0 ? ` – Einheit ${timer.cycle + 1} von ${units}` : "";
     void notify(
       "Pause vorbei",
-      t.autoStartFocus ? `Die nächste Lernphase (${t.focus} Min) läuft.` : `Starte die nächste Lernphase (${t.focus} Min), wenn du bereit bist.`,
+      running ? `Die nächste Lernphase (${t.focus} Min) läuft${unitText}.` : `Starte die nächste Lernphase (${t.focus} Min), wenn du bereit bist.`,
     );
   }
 }

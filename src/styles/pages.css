@@ -861,3 +861,18 @@ rect.heat-cell:focus-visible {
 .welcome-step .check {
   pointer-events: none;
 }
+
+.cycle-dots span.now {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.unit-line {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+.preset-hint {
+  flex-basis: 100%;
+  text-align: center;
+  margin-top: -2px;
+}

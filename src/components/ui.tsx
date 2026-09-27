@@ -196,6 +196,7 @@ export function Stepper({
   step = 1,
   suffix,
   size,
+  display,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -204,6 +205,8 @@ export function Stepper({
   step?: number;
   suffix?: string;
   size?: "sm";
+  /** eigene Anzeige des Werts (z. B. „∞“ für 0) */
+  display?: (v: number) => string;
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   return (
@@ -211,10 +214,7 @@ export function Stepper({
       <button onClick={() => onChange(clamp(value - step))} aria-label="weniger" disabled={value <= min}>
         <Minus size={14} />
       </button>
-      <span>
-        {value}
-        {suffix}
-      </span>
+      <span>{display ? display(value) : `${value}${suffix ?? ""}`}</span>
       <button onClick={() => onChange(clamp(value + step))} aria-label="mehr" disabled={value >= max}>
         <Plus size={14} />
       </button>

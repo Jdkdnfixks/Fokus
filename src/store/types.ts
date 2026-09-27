@@ -162,10 +162,10 @@ export interface Settings {
     focus: number;
     shortBreak: number;
     longBreak: number;
-    /** nach wie vielen Lernphasen eine lange Pause kommt (0 = nie) */
+    /** Lerneinheiten pro Durchgang (0 = ohne Ende); danach lange Pause bzw. Stopp */
     longEvery: number;
-    autoStartBreak: boolean;
-    autoStartFocus: boolean;
+    /** Phasen innerhalb eines Durchgangs automatisch nacheinander starten */
+    autoContinue: boolean;
     sound: ChimeSound;
     soundVolume: number;
     /** Ton in jeder der letzten 5 Sekunden einer Phase */

@@ -14,7 +14,7 @@ Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musi
 
 | Bereich | Was Fokus kann |
 |---|---|
-| **Timer** | Pomodoro mit frei wählbaren Zeiten (z. B. 50/10), lange Pause nach n Einheiten, automatischer Phasenwechsel, Countdown-Töne in den letzten 5 Sekunden, Signalton und Windows-Benachrichtigung, Restzeit im Infobereich und als Fortschritt in der Taskleiste, **Mini-Timer**, der immer im Vordergrund bleibt |
+| **Timer** | Pomodoro mit frei wählbaren Zeiten (z. B. 50/10) und Anzahl der Einheiten pro Durchgang (z. B. 3×) – der Timer läuft automatisch durch alle Lern- und Pausenphasen, optional mit langer Pause am Ende, Countdown-Töne in den letzten 5 Sekunden, Signalton und Windows-Benachrichtigung, Restzeit im Infobereich und als Fortschritt in der Taskleiste, **Mini-Timer**, der immer im Vordergrund bleibt |
 | **Reflexion** | Nach jeder Lernphase: Wie gut war die Konzentration (1–5), was hast du geschafft? |
 | **Module** | Farbe, ECTS, Klausurdatum mit Countdown, Wochenziel in Stunden |
 | **Aufgaben** | Aufgaben pro Modul mit Schätzung in Pomodoros, Fälligkeitsdatum; direkt im Timer auswählen und abhaken |
@@ -58,6 +58,14 @@ Bewahre die Schlüsseldatei zusätzlich sicher auf (z. B. im Passwortmanager). G
 Fehlt das Secret, baut GitHub trotzdem einen Installer (unter „Actions → Lauf → Artifacts“), veröffentlicht aber kein Update.
 
 ## Einrichtung
+
+### Timer und Durchgänge
+Auf der Timer-Seite über **Eigene** (oder eine der Vorlagen wie 50/10 ×3) stellst du ein, wie lange du lernst, wie lang die Pausen sind und wie viele **Einheiten** ein Durchgang hat. Beispiel **60/10 × 3**: 60 Min lernen → 10 Min Pause → 60 Min lernen → 10 Min Pause → 60 Min lernen. Nach dem Start läuft alles automatisch weiter; die Anzeige zeigt „Einheit 2 von 3 · fertig gegen 15:40“.
+
+- **Lange Pause am Ende**: Steht hier eine Zeit, folgt sie nach der letzten Einheit; bei „keine“ stoppt der Timer direkt mit „Durchgang geschafft!“.
+- **Einheiten ∞**: Lernen und Pause wechseln sich ohne Ende ab, bis du auf **Beenden** klickst.
+- **Beenden** bricht den ganzen Durchgang ab; der nächste Start beginnt wieder bei Einheit 1.
+- Soll jede Phase lieber per Klick starten, schalte **Einstellungen → Timer → Phasen automatisch nacheinander starten** aus.
 
 ### PC und Laptop synchronisieren
 1. **Einstellungen → Daten & Synchronisation → Ordner ändern …** und einen Ordner in OneDrive oder Sciebo wählen (z. B. `OneDrive\Fokus`). Deine bisherigen Daten werden dorthin kopiert.
