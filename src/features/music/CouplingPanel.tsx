@@ -35,8 +35,11 @@ export function CouplingPanel() {
         </div>
         <div className="setting">
           <div className="setting-text">
-            <span>Sanft aus- und einblenden</span>
-            <span className="desc">Dauer in Sekunden (eigene Musik und Geräusche).</span>
+            <span>Übergang zwischen Lern- und Pausenmusik</span>
+            <span className="desc">
+              In den letzten Sekunden einer Phase wird die Musik leiser, während die Musik der nächsten Phase schon lauter wird –
+              ein nahtloser Übergang wie bei Spotify. 0 = harter Wechsel.
+            </span>
           </div>
           <Stepper value={music.fadeSeconds} min={0} max={10} suffix=" s" onChange={(v) => set({ fadeSeconds: v })} />
         </div>

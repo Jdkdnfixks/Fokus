@@ -82,3 +82,35 @@ function soft(ac: AudioContext, out: AudioNode, freq: number, t: number) {
     osc.stop(t + 1.5);
   }
 }
+
+/**
+ * Plant einen kurzen, weichen Countdown-Ton exakt zum Zeitpunkt `when`
+ * (AudioContext-Zeit). Weil die Audio-Uhr unabhängig vom Fenster läuft,
+ * kommen die Töne auch bei minimiertem Fenster pünktlich.
+ */
+export function scheduleTick(ac: AudioContext, when: number, sound: ChimeSound, volume: number, last: boolean): AudioScheduledSourceNode {
+  const out = ac.createGain();
+  out.gain.value = Math.min(1, volume) * 0.35;
+  out.connect(ac.destination);
+  const osc = ac.createOscillator();
+  const env = ac.createGain();
+  osc.type = sound === "holz" ? "triangle" : "sine";
+  osc.frequency.value = last ? 1047 : 784;
+  env.gain.setValueAtTime(0, when);
+  env.gain.linearRampToValueAtTime(0.7, when + 0.004);
+  env.gain.exponentialRampToValueAtTime(0.0001, when + (sound === "holz" ? 0.09 : 0.16));
+  osc.connect(env).connect(out);
+  osc.start(when);
+  osc.stop(when + 0.2);
+  osc.onended = () => out.disconnect();
+  return osc;
+}
+
+/** Vorschau in den Einstellungen: 5 Countdown-Töne und danach das Signal */
+export function previewCountdown(sound: ChimeSound, volume: number) {
+  if (sound === "aus" || volume <= 0) return;
+  const ac = audioContext();
+  const t0 = ac.currentTime + 0.05;
+  for (let i = 0; i < 5; i++) scheduleTick(ac, t0 + i, sound, volume, i === 4);
+  setTimeout(() => playChime(sound, volume, "down"), 5000);
+}

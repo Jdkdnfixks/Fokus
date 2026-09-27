@@ -14,7 +14,7 @@ Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musi
 
 | Bereich | Was Fokus kann |
 |---|---|
-| **Timer** | Pomodoro mit frei wählbaren Zeiten (z. B. 50/10), lange Pause nach n Einheiten, automatischer Phasenwechsel, Signalton und Windows-Benachrichtigung, Restzeit im Infobereich und als Fortschritt in der Taskleiste, **Mini-Timer**, der immer im Vordergrund bleibt |
+| **Timer** | Pomodoro mit frei wählbaren Zeiten (z. B. 50/10), lange Pause nach n Einheiten, automatischer Phasenwechsel, Countdown-Töne in den letzten 5 Sekunden, Signalton und Windows-Benachrichtigung, Restzeit im Infobereich und als Fortschritt in der Taskleiste, **Mini-Timer**, der immer im Vordergrund bleibt |
 | **Reflexion** | Nach jeder Lernphase: Wie gut war die Konzentration (1–5), was hast du geschafft? |
 | **Module** | Farbe, ECTS, Klausurdatum mit Countdown, Wochenziel in Stunden |
 | **Aufgaben** | Aufgaben pro Modul mit Schätzung in Pomodoros, Fälligkeitsdatum; direkt im Timer auswählen und abhaken |
@@ -77,6 +77,8 @@ Sobald du MP3s hinzufügst, spielt Fokus sie automatisch in jeder Lernphase ab u
 
 ### Musik in den Pausen
 Unter **Musik → Timer-Kopplung → In Pausen** wählst du, was in der Pause passiert: Lernmusik **pausieren**, **weiterlaufen** lassen oder eine eigene **Pausenmusik** (eigene Playlist oder Spotify-Playlist). Schnell geht es auch über **„Als Pausenmusik“** auf der Musikseite bzw. das Tassen-Symbol bei einer Spotify-Playlist. Nach der Pause setzt Fokus deine Lernmusik genau an der unterbrochenen Stelle fort.
+
+Der Wechsel ist fließend: In den letzten Sekunden einer Phase wird die bisherige Musik leiser, während die Musik der nächsten Phase schon lauter wird – wie der nahtlose Übergang bei Spotify. Die Dauer stellst du unter **Musik → Timer-Kopplung → Übergang** ein (Standard: 3 Sekunden, 0 = harter Wechsel).
 
 Fokus steuert die Spotify-App auf deinem PC. Ist Spotify nicht geöffnet, startet Fokus die App beim ersten Abspielen.
 

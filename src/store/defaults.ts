@@ -56,6 +56,7 @@ export function defaultSettings(): Settings {
       autoStartFocus: false,
       sound: "glocke",
       soundVolume: 0.6,
+      countdownTicks: true,
       notifications: true,
       reflection: true,
       presets: DEFAULT_PRESETS,

@@ -14,18 +14,19 @@ vi.mock("../music/spotify", async () => {
     connected: true,
     playback: null,
   }));
+  const play = (uri: string | null) =>
+    useSpotify.setState({ playback: { isPlaying: true, contextUri: uri ?? useSpotify.getState().playback?.contextUri ?? null } });
   return {
     useSpotify,
     isSpotifyConnected: () => true,
-    spotifyPlay: vi.fn(async (uri?: string | null) => {
-      useSpotify.setState({ playback: { isPlaying: true, contextUri: uri ?? useSpotify.getState().playback?.contextUri ?? null } });
-    }),
-    spotifyPause: vi.fn(async () => {
+    spotifyPlayFadeIn: vi.fn(async (uri: string | null) => play(uri)),
+    spotifySwitch: vi.fn(async (uri: string | null) => play(uri)),
+    spotifyFadeOutAndPause: vi.fn(async () => {
       const pb = useSpotify.getState().playback;
       useSpotify.setState({ playback: pb ? { ...pb, isPlaying: false } : null });
     }),
     spotifySnapshot: vi.fn(async () => ({ contextUri: "spotify:playlist:lern", trackUri: "spotify:track:x", positionMs: 90_000 })),
-    spotifyRestore: vi.fn(async () => {}),
+    spotifyRestore: vi.fn(async () => play("spotify:playlist:lern")),
   };
 });
 
@@ -74,11 +75,13 @@ coupling.startCoupling();
 beforeEach(() => {
   useTimer.getState().stop();
   coupling.resetCouplingState();
-  vi.mocked(spotify.spotifyPlay).mockClear();
-  vi.mocked(spotify.spotifyPause).mockClear();
-  vi.mocked(spotify.spotifyRestore).mockClear();
+  for (const fn of [spotify.spotifyPlayFadeIn, spotify.spotifySwitch, spotify.spotifyFadeOutAndPause, spotify.spotifyRestore]) {
+    vi.mocked(fn).mockClear();
+  }
   spotify.useSpotify.setState({ playback: null });
 });
+
+const FADE = 3;
 
 describe("Pausenmusik", () => {
   it("eigene Musik: wechselt in der Pause auf die Pausen-Playlist und setzt danach die Lernmusik fort", async () => {
@@ -86,23 +89,23 @@ describe("Pausenmusik", () => {
 
     useTimer.getState().start();
     await settle();
-    expect(player.playQueue).toHaveBeenLastCalledWith(["t1"], 0, "lern");
+    expect(player.playQueue).toHaveBeenLastCalledWith(["t1"], 0, "lern", FADE);
 
     // Lernphase endet → Pause startet automatisch
     useTimer.getState().finishPhase(true);
     await settle();
     expect(player.snapshot).toHaveBeenCalled();
-    expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause");
+    expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause", FADE);
 
     // Pause vorbei (übersprungen) → Timer wartet → Pausenmusik stoppt
     useTimer.getState().skip();
     await settle();
     expect(player.pause).toHaveBeenCalled();
 
-    // nächste Lernphase → Lernmusik an der gemerkten Stelle
+    // nächste Lernphase → Lernmusik an der gemerkten Stelle (mit Überblendung)
     useTimer.getState().start();
     await settle();
-    expect(player.restore).toHaveBeenCalledWith(expect.objectContaining({ position: 123, playlistId: "lern" }), expect.any(Number));
+    expect(player.restore).toHaveBeenCalledWith(expect.objectContaining({ position: 123, playlistId: "lern" }), FADE);
     expect(player.playQueue).toHaveBeenCalledTimes(2);
   });
 
@@ -124,18 +127,19 @@ describe("Pausenmusik", () => {
 
     useTimer.getState().start();
     await settle();
-    expect(spotify.spotifyPlay).toHaveBeenLastCalledWith("spotify:playlist:lern");
+    expect(spotify.spotifyPlayFadeIn).toHaveBeenLastCalledWith("spotify:playlist:lern", FADE);
 
     useTimer.getState().finishPhase(true);
     await settle();
-    expect(spotify.spotifyPause).toHaveBeenCalled();
-    expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause");
+    // Spotify wird leiser, während die eigene Pausenmusik einsetzt
+    expect(spotify.spotifyFadeOutAndPause).toHaveBeenCalledWith(FADE);
+    expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause", FADE);
 
     useTimer.getState().skip();
     useTimer.getState().start();
     await settle();
     // gleiche Playlist war nur pausiert → fortsetzen statt neu starten
-    expect(spotify.spotifyPlay).toHaveBeenLastCalledWith(null);
+    expect(spotify.spotifyPlayFadeIn).toHaveBeenLastCalledWith(null, FADE);
   });
 
   it("Spotify in beiden Phasen: Pausen-Playlist, danach zurück an die alte Stelle", async () => {
@@ -149,12 +153,12 @@ describe("Pausenmusik", () => {
     await settle();
     useTimer.getState().finishPhase(true);
     await settle();
-    expect(spotify.spotifyPlay).toHaveBeenLastCalledWith("spotify:playlist:pause");
+    expect(spotify.spotifySwitch).toHaveBeenLastCalledWith("spotify:playlist:pause", FADE);
 
     useTimer.getState().skip();
     useTimer.getState().start();
     await settle();
-    expect(spotify.spotifyRestore).toHaveBeenCalledWith(expect.objectContaining({ trackUri: "spotify:track:x", positionMs: 90_000 }));
+    expect(spotify.spotifyRestore).toHaveBeenCalledWith(expect.objectContaining({ trackUri: "spotify:track:x", positionMs: 90_000 }), FADE);
   });
 
   it("„Weiterlaufen“ lässt die Lernmusik in der Pause an", async () => {
@@ -165,5 +169,48 @@ describe("Pausenmusik", () => {
     await settle();
     expect(player.pause).not.toHaveBeenCalled();
     expect(player.playQueue).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Überblendung vor dem Phasenende", () => {
+  it("startet die Pausenmusik schon in den letzten Sekunden der Lernphase – und nicht noch einmal danach", async () => {
+    const player = setup({ focusSource: "local", localPlaylistId: "lern", breakSource: "local", breakLocalPlaylistId: "pause" });
+    useTimer.getState().start();
+    await settle();
+
+    await coupling.onPhaseEnding(); // 3 s vor Ende
+    expect(useTimer.getState().phase).toBe("focus");
+    expect(player.playQueue).toHaveBeenLastCalledWith(["t2"], 0, "pause", FADE);
+
+    useTimer.getState().finishPhase(true);
+    await settle();
+    expect(player.playQueue).toHaveBeenCalledTimes(2); // Lernmusik + Pausenmusik, kein zweiter Start
+  });
+
+  it("blendet die Lernmusik vor einer stillen Pause schon vor dem Ende aus", async () => {
+    const player = setup({ focusSource: "local", localPlaylistId: "lern", breakSource: "pause" });
+    useTimer.getState().start();
+    await settle();
+    await coupling.onPhaseEnding();
+    expect(player.pause).toHaveBeenCalledWith(FADE);
+  });
+
+  it("überblendet am Ende der Pause zurück zur Lernmusik, wenn die Lernphase automatisch startet", async () => {
+    const player = setup({ focusSource: "local", localPlaylistId: "lern", breakSource: "local", breakLocalPlaylistId: "pause" });
+    useData.setState((s) => ({
+      data: { ...s.data, settings: { ...s.data.settings, timer: { ...s.data.settings.timer, autoStartFocus: true } } },
+    }));
+    useTimer.getState().start();
+    await settle();
+    useTimer.getState().finishPhase(true); // → Pause mit Pausenmusik
+    await settle();
+
+    await coupling.onPhaseEnding(); // 3 s vor Ende der Pause
+    expect(player.restore).toHaveBeenCalledWith(expect.objectContaining({ position: 123 }), FADE);
+
+    useTimer.getState().finishPhase(true); // → Lernphase startet automatisch
+    await settle();
+    expect(player.restore).toHaveBeenCalledTimes(1);
+    expect(player.playQueue).toHaveBeenCalledTimes(2);
   });
 });

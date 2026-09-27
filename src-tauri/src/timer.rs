@@ -3,7 +3,7 @@
 //! wird, plant das Backend einen Weckruf (`timer://alarm`) und aktualisiert
 //! Tray-Tooltip und Fortschrittsanzeige in der Taskleiste selbst.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::window::{ProgressBarState, ProgressBarStatus};
@@ -43,8 +43,21 @@ fn fmt_ms(ms: i64) -> String {
     format!("{:02}:{:02}", total / 60, total % 60)
 }
 
+/// Zeitmarke kurz vor Phasenende (z. B. Countdown-Töne, Musik-Überblendung)
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MarkPayload {
+    ends_at_ms: i64,
+    before: i64,
+}
+
 #[tauri::command]
-pub fn timer_sync(app: AppHandle, state: State<'_, TimerState>, display: TimerDisplay) -> Result<(), String> {
+pub fn timer_sync(
+    app: AppHandle,
+    state: State<'_, TimerState>,
+    display: TimerDisplay,
+    marks: Option<Vec<i64>>,
+) -> Result<(), String> {
     let generation = {
         let mut g = state.generation.lock().map_err(|e| e.to_string())?;
         *g += 1;
@@ -56,22 +69,34 @@ pub fn timer_sync(app: AppHandle, state: State<'_, TimerState>, display: TimerDi
     render(&app);
 
     if running {
+        for before in marks.unwrap_or_default().into_iter().filter(|b| *b > 0) {
+            let handle = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let wait = (ends_at - before - now_ms()).max(0) as u64;
+                tokio::time::sleep(Duration::from_millis(wait)).await;
+                if is_current(&handle, generation) {
+                    let _ = handle.emit("timer://mark", MarkPayload { ends_at_ms: ends_at, before });
+                }
+            });
+        }
         let handle = app.clone();
         tauri::async_runtime::spawn(async move {
             let wait = (ends_at - now_ms()).max(0) as u64;
             tokio::time::sleep(Duration::from_millis(wait)).await;
-            let still_current = handle
-                .state::<TimerState>()
-                .generation
-                .lock()
-                .map(|g| *g == generation)
-                .unwrap_or(false);
-            if still_current {
+            if is_current(&handle, generation) {
                 let _ = handle.emit("timer://alarm", ends_at);
             }
         });
     }
     Ok(())
+}
+
+fn is_current(app: &AppHandle, generation: u64) -> bool {
+    app.state::<TimerState>()
+        .generation
+        .lock()
+        .map(|g| *g == generation)
+        .unwrap_or(false)
 }
 
 /// Aktualisiert Tooltip und Taskleisten-Fortschritt (nur bei Änderungen).

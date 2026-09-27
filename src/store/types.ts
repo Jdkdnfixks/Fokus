@@ -168,6 +168,8 @@ export interface Settings {
     autoStartFocus: boolean;
     sound: ChimeSound;
     soundVolume: number;
+    /** Ton in jeder der letzten 5 Sekunden einer Phase */
+    countdownTicks: boolean;
     notifications: boolean;
     reflection: boolean;
     presets: TimerPreset[];

@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Segmented, Slider, Stepper, Switch, ask, confirmDanger, toast } from "../../components/ui";
-import { playChime } from "../../lib/sounds";
+import { playChime, previewCountdown } from "../../lib/sounds";
 import { call, errorText, isTauri } from "../../lib/tauri";
 import { fmtDate, todayStr } from "../../lib/time";
 import { DEFAULT_BLOCKLIST, normalizeData } from "../../store/defaults";
@@ -164,6 +164,14 @@ function TimerSection() {
           <button className="btn sm" onClick={() => playChime(t.sound, t.soundVolume)}>
             Test
           </button>
+        </div>
+      </Row>
+      <Row title="Countdown in den letzten 5 Sekunden" desc="Ein kurzer Ton pro Sekunde zählt das Ende jeder Lern- und Pausenphase herunter.">
+        <div className="row">
+          <button className="btn sm" onClick={() => previewCountdown(t.sound, t.soundVolume)} disabled={t.sound === "aus"}>
+            Anhören
+          </button>
+          <Switch checked={t.countdownTicks} onChange={(v) => set("timer", { countdownTicks: v })} />
         </div>
       </Row>
       <Row title={<span className="row gap-4"><Bell size={14} /> Windows-Benachrichtigungen</span>} desc="Auch wenn Fokus minimiert ist.">

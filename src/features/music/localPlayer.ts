@@ -25,7 +25,8 @@ interface LocalPlayerState {
   repeat: Repeat;
   error: string | null;
 
-  playQueue(trackIds: ID[], startIndex?: number, playlistId?: ID | null): void;
+  /** Playlist abspielen; mit `fade` > 0 wird vom bisherigen Titel übergeblendet */
+  playQueue(trackIds: ID[], startIndex?: number, playlistId?: ID | null, fade?: number): void;
   toggle(): void;
   resume(fade?: number): void;
   pause(fade?: number): void;
@@ -36,12 +37,17 @@ interface LocalPlayerState {
   setRepeat(r: Repeat): void;
   /** aktuellen Stand merken (null, wenn nichts geladen ist) */
   snapshot(): LocalSnapshot | null;
-  /** gemerkten Stand wiederherstellen und an derselben Stelle weiterspielen */
+  /** gemerkten Stand wiederherstellen und an derselben Stelle weiterspielen (mit Überblendung) */
   restore(snap: LocalSnapshot, fade?: number): void;
 }
 
+/**
+ * Der Player arbeitet mit bis zu zwei Audio-Elementen („Decks“): Beim Wechsel
+ * der Musik wird das alte Deck ausgeblendet, während das neue eingeblendet wird
+ * (Überblendung wie bei Spotify). `audio` ist immer das aktuelle Deck.
+ */
 let audio: HTMLAudioElement | null = null;
-let fadeTimer: ReturnType<typeof setInterval> | null = null;
+const ramps = new Map<HTMLAudioElement, ReturnType<typeof setInterval>>();
 let musicDir: string | null = null;
 
 export function setMusicDir(dir: string | null) {
@@ -58,74 +64,143 @@ function targetVolume() {
   return Math.max(0, Math.min(1, useData.getState().data.settings.music.localVolume));
 }
 
-function getAudio(): HTMLAudioElement {
-  if (audio) return audio;
-  audio = new Audio();
-  audio.preload = "auto";
-  audio.addEventListener("timeupdate", () => {
-    useLocalPlayer.setState({ position: audio!.currentTime });
+function createAudio(): HTMLAudioElement {
+  const el = new Audio();
+  el.preload = "auto";
+  el.addEventListener("timeupdate", () => {
+    if (el === audio) useLocalPlayer.setState({ position: el.currentTime });
   });
-  audio.addEventListener("loadedmetadata", () => {
-    useLocalPlayer.setState({ duration: audio!.duration || 0 });
+  el.addEventListener("loadedmetadata", () => {
+    if (el === audio) useLocalPlayer.setState({ duration: el.duration || 0 });
   });
-  audio.addEventListener("ended", () => {
+  el.addEventListener("ended", () => {
+    if (el !== audio) return;
     const s = useLocalPlayer.getState();
     if (s.repeat === "one") {
-      audio!.currentTime = 0;
-      void audio!.play();
+      el.currentTime = 0;
+      void el.play();
     } else {
       advance(1, true);
     }
   });
-  audio.addEventListener("error", () => {
-    useLocalPlayer.setState({ error: "Titel konnte nicht abgespielt werden.", playing: false });
+  el.addEventListener("error", () => {
+    if (el === audio && el.getAttribute("src")) {
+      useLocalPlayer.setState({ error: "Titel konnte nicht abgespielt werden.", playing: false });
+    }
   });
+  return el;
+}
+
+function getAudio(): HTMLAudioElement {
+  if (!audio) audio = createAudio();
   return audio;
 }
 
-function clearFade() {
-  if (fadeTimer) {
-    clearInterval(fadeTimer);
-    fadeTimer = null;
+function stopRamp(el: HTMLAudioElement) {
+  const t = ramps.get(el);
+  if (t) {
+    clearInterval(t);
+    ramps.delete(el);
   }
 }
 
-/** Blendet die Lautstärke weich über `seconds` auf `to`. */
-function fadeTo(to: number, seconds: number, done?: () => void) {
-  const a = getAudio();
-  clearFade();
-  if (seconds <= 0 || document.hidden) {
-    a.volume = to;
+/** Blendet die Lautstärke eines Decks weich über `seconds` auf `to`. */
+function ramp(el: HTMLAudioElement, to: number, seconds: number, done?: () => void) {
+  stopRamp(el);
+  if (seconds <= 0) {
+    el.volume = to;
     done?.();
     return;
   }
-  const from = a.volume;
+  const from = el.volume;
   const start = performance.now();
-  fadeTimer = setInterval(() => {
-    const t = Math.min(1, (performance.now() - start) / (seconds * 1000));
-    a.volume = Math.max(0, Math.min(1, from + (to - from) * t));
-    if (t >= 1) {
-      clearFade();
-      done?.();
-    }
-  }, 50);
+  ramps.set(
+    el,
+    setInterval(() => {
+      const t = Math.min(1, (performance.now() - start) / (seconds * 1000));
+      el.volume = Math.max(0, Math.min(1, from + (to - from) * t));
+      if (t >= 1) {
+        stopRamp(el);
+        done?.();
+      }
+    }, 50),
+  );
 }
 
-function loadIndex(index: number, autoplay: boolean) {
+function clearFade() {
+  if (audio) stopRamp(audio);
+}
+
+function fadeTo(to: number, seconds: number, done?: () => void) {
+  ramp(getAudio(), to, seconds, done);
+}
+
+/** Altes Deck ausblenden und freigeben */
+function retire(el: HTMLAudioElement, seconds: number) {
+  const finish = () => {
+    el.pause();
+    el.removeAttribute("src");
+    el.load();
+  };
+  if (el.paused || seconds <= 0) {
+    stopRamp(el);
+    finish();
+  } else {
+    ramp(el, 0, seconds, finish);
+  }
+}
+
+/** Setzt die Quelle eines Decks auf den Titel an Position `index` der Warteschlange. */
+function loadInto(el: HTMLAudioElement, index: number): boolean {
   const s = useLocalPlayer.getState();
-  const tracks = useData.getState().data.tracks;
-  const id = s.queue[index];
-  const track = tracks.find((t) => t.id === id);
-  if (!track) return;
+  const track = useData.getState().data.tracks.find((t) => t.id === s.queue[index]);
+  if (!track) return false;
   const url = trackUrl(track);
   if (!url) {
     useLocalPlayer.setState({ error: "Musik lässt sich nur in der Desktop-App abspielen." });
-    return;
+    return false;
   }
-  const a = getAudio();
-  a.src = url;
-  a.volume = targetVolume();
+  el.src = url;
   useLocalPlayer.setState({ index, position: 0, duration: track.duration ?? 0, error: null });
+  return true;
+}
+
+/**
+ * Überblendet auf ein neues Deck: Das bisherige wird über `seconds` leiser,
+ * das neue startet (ggf. an `position`) und wird gleichzeitig lauter.
+ */
+function crossfadeTo(index: number, seconds: number, position = 0) {
+  const old = audio;
+  const next = createAudio();
+  audio = next;
+  if (old) retire(old, seconds);
+  if (!loadInto(next, index)) return;
+  next.volume = 0;
+  const start = () => {
+    if (position > 0) next.currentTime = Math.min(position, next.duration || position);
+    void next
+      .play()
+      .then(() => {
+        if (audio !== next) return;
+        useLocalPlayer.setState({ playing: true });
+        ramp(next, targetVolume(), seconds);
+      })
+      .catch(() => useLocalPlayer.setState({ playing: false }));
+  };
+  if (position > 0 && next.readyState < 1) {
+    const onMeta = () => {
+      next.removeEventListener("loadedmetadata", onMeta);
+      start();
+    };
+    next.addEventListener("loadedmetadata", onMeta);
+  } else start();
+}
+
+function loadIndex(index: number, autoplay: boolean) {
+  const a = getAudio();
+  stopRamp(a);
+  if (!loadInto(a, index)) return;
+  a.volume = targetVolume();
   if (autoplay) {
     void a
       .play()
@@ -169,12 +244,14 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
   repeat: "all",
   error: null,
 
-  playQueue(trackIds, startIndex = 0, playlistId = null) {
+  playQueue(trackIds, startIndex = 0, playlistId = null, fade = 0) {
     if (!trackIds.length) return;
     const first = trackIds[startIndex];
     const queue = get().shuffle ? shuffled(trackIds, first) : trackIds;
     set({ queue, playlistId, index: 0 });
-    loadIndex(get().shuffle ? 0 : startIndex, true);
+    const index = get().shuffle ? 0 : startIndex;
+    if (fade > 0) crossfadeTo(index, fade);
+    else loadIndex(index, true);
   },
 
   toggle() {
@@ -251,21 +328,13 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
   restore(snap, fade = 0) {
     if (!snap.queue.length) return;
     set({ queue: snap.queue, playlistId: snap.playlistId });
-    loadIndex(Math.min(snap.index, snap.queue.length - 1), false);
-    const a = getAudio();
-    const seekAndPlay = () => {
-      a.removeEventListener("loadedmetadata", seekAndPlay);
-      a.currentTime = Math.min(snap.position, a.duration || snap.position);
-      get().resume(fade);
-    };
-    if (a.readyState >= 1) seekAndPlay();
-    else a.addEventListener("loadedmetadata", seekAndPlay);
+    crossfadeTo(Math.min(snap.index, snap.queue.length - 1), fade, snap.position);
   },
 }));
 
 /** Lautstärke-Einstellung sofort anwenden */
 export function applyLocalVolume() {
-  if (audio && !fadeTimer) audio.volume = targetVolume();
+  if (audio && !ramps.has(audio)) audio.volume = targetVolume();
 }
 
 /** Titel der Playlist (oder aller Titel), in Anzeigereihenfolge */

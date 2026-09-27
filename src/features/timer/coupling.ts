@@ -4,10 +4,11 @@ import { ambientStart, ambientStop, hasAmbientMix, useAmbient } from "../music/a
 import { playlistTrackIds, useLocalPlayer, type LocalSnapshot } from "../music/localPlayer";
 import {
   isSpotifyConnected,
-  spotifyPause,
-  spotifyPlay,
+  spotifyFadeOutAndPause,
+  spotifyPlayFadeIn,
   spotifyRestore,
   spotifySnapshot,
+  spotifySwitch,
   useSpotify,
   type SpotifySnapshot,
 } from "../music/spotify";
@@ -78,12 +79,15 @@ async function onModeChange(m: Mode) {
 /* ================= Musik: Lern- und Pausenmusik ================= */
 
 type Kind = "local" | "spotify";
-type MusicSettings = ReturnType<typeof useData.getState>["data"]["settings"]["music"];
+type AppSettings = ReturnType<typeof useData.getState>["data"]["settings"];
+type MusicSettings = AppSettings["music"];
 
 /** Was der Timer gerade abspielt */
 let active: { role: "focus" | "break"; kind: Kind } | null = null;
 /** Stand der Lernmusik, bevor die Pausenmusik übernommen hat */
 let focusSnapshot: { kind: "local"; snap: LocalSnapshot } | { kind: "spotify"; snap: SpotifySnapshot } | null = null;
+/** Überblendung, die schon kurz vor dem Phasenende begonnen hat */
+let preTransition: "focus" | "break" | null = null;
 
 function focusKind(music: MusicSettings): Kind | null {
   if (music.focusSource === "local") return "local";
@@ -99,7 +103,7 @@ function breakKind(music: MusicSettings): Kind | null {
 
 async function pauseKind(kind: Kind | null, fade: number) {
   if (kind === "local") useLocalPlayer.getState().pause(fade);
-  else if (kind === "spotify" && useSpotify.getState().playback?.isPlaying) await spotifyPause();
+  else if (kind === "spotify") await spotifyFadeOutAndPause(fade);
 }
 
 async function onMusic(m: Mode, music: MusicSettings) {
@@ -108,34 +112,44 @@ async function onMusic(m: Mode, music: MusicSettings) {
 
   switch (m) {
     case "focus-running": {
-      // Kommt die Lernphase nach Pausenmusik, zuerst zurückschalten
+      // Überblendung lief schon in den letzten Sekunden der Pause
+      if (preTransition === "focus") {
+        preTransition = null;
+        return;
+      }
+      preTransition = null;
       if (active?.role === "break") {
-        const restored = await leaveBreak(active.kind, fKind, fade);
+        const restored = await leaveBreak(active.kind, fKind, fade, music);
         active = fKind ? { role: "focus", kind: fKind } : null;
         if (restored) return;
       }
-      if (fKind === "local") startLocalFocusMusic(music.localPlaylistId, fade);
-      else if (fKind === "spotify") await startSpotifyFocusMusic(music.spotifyUri);
-      if (fKind) active = { role: "focus", kind: fKind };
+      await startFocusMusic(fKind, music, fade);
       return;
     }
 
     case "focus-paused":
     case "idle":
+      preTransition = null;
       await pauseKind(active?.kind ?? fKind, fade);
       return;
 
     case "break-running": {
+      // Überblendung lief schon in den letzten Sekunden der Lernphase
+      if (preTransition === "break") {
+        preTransition = null;
+        return;
+      }
+      preTransition = null;
       if (music.breakSource === "continue") return;
       const bKind = breakKind(music);
       if (!bKind) {
-        await pauseKind(fKind, fade);
+        await pauseKind(active?.kind ?? fKind, fade);
         return;
       }
       if (active?.role === "break") {
         // Pause war angehalten und läuft weiter
         if (bKind === "local") useLocalPlayer.getState().resume(fade);
-        else await spotifyPlay(null);
+        else await spotifyPlayFadeIn(null, fade);
         return;
       }
       await enterBreak(bKind, fKind, music, fade);
@@ -144,41 +158,97 @@ async function onMusic(m: Mode, music: MusicSettings) {
     }
 
     case "break-paused":
+      preTransition = null;
       if (music.breakSource === "continue") return;
-      if (active?.role === "break") await pauseKind(active.kind, fade);
-      else await pauseKind(fKind, fade);
+      await pauseKind(active?.kind ?? fKind, fade);
       return;
   }
 }
 
-/** Lernmusik merken und Pausenmusik starten */
+/**
+ * Wird kurz vor dem Ende einer laufenden Phase aufgerufen (so viele Sekunden
+ * vorher, wie der Übergang dauert). Die alte Musik wird leiser, während die
+ * Musik der nächsten Phase schon lauter wird – nahtlos wie bei Spotify.
+ */
+export async function onPhaseEnding() {
+  const t = useTimer.getState();
+  const { settings } = useData.getState().data;
+  const music = settings.music;
+  const fade = music.fadeSeconds;
+  if (!music.couple || t.status !== "running" || fade <= 0) return;
+  const fKind = focusKind(music);
+
+  if (t.phase === "focus") {
+    if (music.breakSource === "continue") return;
+    const bKind = breakKind(music);
+    if (bKind && settings.timer.autoStartBreak) {
+      preTransition = "break";
+      await enterBreak(bKind, fKind, music, fade);
+      active = { role: "break", kind: bKind };
+    } else {
+      // keine Pausenmusik (oder Pause startet erst per Klick): Lernmusik ausklingen lassen
+      await pauseKind(active?.kind ?? fKind, fade);
+    }
+    return;
+  }
+
+  // Pause endet
+  if (settings.timer.autoStartFocus) {
+    preTransition = "focus";
+    if (active?.role === "break") {
+      const restored = await leaveBreak(active.kind, fKind, fade, music);
+      active = fKind ? { role: "focus", kind: fKind } : null;
+      if (!restored) await startFocusMusic(fKind, music, fade);
+    } else if (music.breakSource !== "continue") {
+      await startFocusMusic(fKind, music, fade);
+    }
+  } else if (active?.role === "break") {
+    // Lernphase startet erst per Klick: Pausenmusik ausklingen lassen
+    await pauseKind(active.kind, fade);
+  }
+}
+
+async function startFocusMusic(fKind: Kind | null, music: MusicSettings, fade: number) {
+  if (fKind === "local") startLocalFocusMusic(music.localPlaylistId, fade);
+  else if (fKind === "spotify") await startSpotifyFocusMusic(music.spotifyUri, fade);
+  if (fKind) active = { role: "focus", kind: fKind };
+}
+
+/** Lernmusik merken und mit Überblendung zur Pausenmusik wechseln */
 async function enterBreak(bKind: Kind, fKind: Kind | null, music: MusicSettings, fade: number) {
   const player = useLocalPlayer.getState();
   focusSnapshot = null;
+  let spotifyOut: Promise<void> | null = null;
+
   if (fKind === "local") {
     const snap = player.snapshot();
-    if (snap && bKind === "local") focusSnapshot = { kind: "local", snap };
+    if (snap && bKind === "local") focusSnapshot = { kind: "local", snap }; // Überblendung ersetzt das Deck
     else player.pause(fade);
   } else if (fKind === "spotify") {
     if (bKind === "spotify") {
       const snap = await spotifySnapshot();
       if (snap) focusSnapshot = { kind: "spotify", snap };
-    } else await pauseKind("spotify", fade);
+    } else {
+      spotifyOut = spotifyFadeOutAndPause(fade); // gleichzeitig zur einsetzenden Pausenmusik
+    }
   }
 
   if (bKind === "local") {
     const ids = playlistTrackIds(music.breakLocalPlaylistId);
-    useLocalPlayer.getState().playQueue(ids, 0, music.breakLocalPlaylistId);
+    useLocalPlayer.getState().playQueue(ids, 0, music.breakLocalPlaylistId, fade);
+  } else if (fKind === "spotify") {
+    await spotifySwitch(music.breakSpotifyUri, fade);
   } else {
-    await spotifyPlay(music.breakSpotifyUri);
+    await spotifyPlayFadeIn(music.breakSpotifyUri, fade);
   }
+  if (spotifyOut) await spotifyOut;
 }
 
 /**
  * Pausenmusik beenden. Nutzt die Lernmusik dieselbe Quelle, wird der gemerkte
- * Stand wiederhergestellt (liefert dann true).
+ * Stand mit Überblendung wiederhergestellt (liefert dann true).
  */
-async function leaveBreak(bKind: Kind, fKind: Kind | null, fade: number): Promise<boolean> {
+async function leaveBreak(bKind: Kind, fKind: Kind | null, fade: number, music: MusicSettings): Promise<boolean> {
   const snap = focusSnapshot;
   focusSnapshot = null;
   if (snap && snap.kind === "local" && fKind === "local" && bKind === "local") {
@@ -186,10 +256,25 @@ async function leaveBreak(bKind: Kind, fKind: Kind | null, fade: number): Promis
     return true;
   }
   if (snap && snap.kind === "spotify" && fKind === "spotify" && bKind === "spotify") {
-    await spotifyRestore(snap.snap);
+    await spotifyRestore(snap.snap, fade);
     return true;
   }
-  await pauseKind(bKind, fade);
+  if (bKind === "spotify" && fKind === "spotify") {
+    // gleicher Spotify-Player: erst ausblenden, dann startet die Lernmusik
+    await spotifyFadeOutAndPause(fade);
+  } else if (bKind === "spotify") {
+    void spotifyFadeOutAndPause(fade); // parallel zur einsetzenden Lernmusik
+  } else if (fKind === "local") {
+    // eigene Pausenmusik → eigene Lernmusik ohne gemerkten Stand: direkt überblenden
+    const ids = playlistTrackIds(music.localPlaylistId);
+    if (ids.length) {
+      useLocalPlayer.getState().playQueue(ids, 0, music.localPlaylistId, fade);
+      return true;
+    }
+    useLocalPlayer.getState().pause(fade);
+  } else {
+    useLocalPlayer.getState().pause(fade);
+  }
   return false;
 }
 
@@ -197,6 +282,7 @@ async function leaveBreak(bKind: Kind, fKind: Kind | null, fade: number): Promis
 export function resetCouplingState() {
   active = null;
   focusSnapshot = null;
+  preTransition = null;
 }
 
 /**
@@ -212,13 +298,13 @@ function startLocalFocusMusic(playlistId: string | null, fade: number) {
     return;
   }
   const ids = playlistTrackIds(playlistId);
-  if (ids.length) player.playQueue(ids, 0, playlistId);
+  if (ids.length) player.playQueue(ids, 0, playlistId, fade);
 }
 
-async function startSpotifyFocusMusic(uri: string | null) {
+async function startSpotifyFocusMusic(uri: string | null, fade: number) {
   const pb = useSpotify.getState().playback;
   if (pb?.isPlaying && (!uri || pb.contextUri === uri)) return;
   // gleiche Playlist pausiert → fortsetzen statt von vorne
-  if (uri && pb && pb.contextUri === uri) await spotifyPlay(null);
-  else await spotifyPlay(uri);
+  if (uri && pb && pb.contextUri === uri) await spotifyPlayFadeIn(null, fade);
+  else await spotifyPlayFadeIn(uri, fade);
 }

@@ -420,8 +420,83 @@ export async function spotifySnapshot(): Promise<SpotifySnapshot | null> {
 }
 
 /** Setzt einen gemerkten Stand fort (gleiche Playlist, gleicher Titel, gleiche Stelle). */
-export async function spotifyRestore(snap: SpotifySnapshot) {
-  await spotifyPlay(snap.contextUri, { offsetUri: snap.trackUri, positionMs: snap.positionMs });
+/** Setzt einen gemerkten Stand fort – mit Überblendung, wenn `fade` > 0. */
+export async function spotifyRestore(snap: SpotifySnapshot, fade = 0) {
+  await spotifySwitch(snap.contextUri, fade, { offsetUri: snap.trackUri, positionMs: snap.positionMs });
+}
+
+/* ---------------- Sanfte Übergänge (über die Lautstärke) ---------------- */
+
+/** Lautstärke vor einer Blende – danach wird sie wiederhergestellt */
+let baseVolume: number | null = null;
+
+async function setVolumeQuiet(percent: number) {
+  try {
+    await api(`/me/player/volume?volume_percent=${Math.max(0, Math.min(100, Math.round(percent)))}`, { method: "PUT" });
+  } catch {
+    /* manche Geräte erlauben keine Lautstärkeregelung */
+  }
+}
+
+function currentBase(): number | null {
+  if (baseVolume !== null) return baseVolume;
+  const v = useSpotify.getState().playback?.volume;
+  return typeof v === "number" ? v : null;
+}
+
+async function rampVolume(from: number, to: number, seconds: number) {
+  const steps = Math.max(2, Math.round(seconds * 2));
+  for (let i = 1; i <= steps; i++) {
+    await sleep((seconds * 1000) / steps);
+    await setVolumeQuiet(from + ((to - from) * i) / steps);
+  }
+}
+
+/** Leiser werden, anhalten und die ursprüngliche Lautstärke wiederherstellen. */
+export async function spotifyFadeOutAndPause(seconds: number) {
+  if (!useSpotify.getState().playback?.isPlaying) return;
+  const base = currentBase();
+  if (base !== null && seconds > 0) {
+    baseVolume = base;
+    await rampVolume(base, 0, seconds);
+  }
+  await spotifyPause();
+  if (base !== null && seconds > 0) {
+    await setVolumeQuiet(base);
+    baseVolume = null;
+  }
+}
+
+/** Abspielen und dabei langsam lauter werden. */
+export async function spotifyPlayFadeIn(uri: string | null, seconds: number, opts: { offsetUri?: string; positionMs?: number } = {}) {
+  const base = currentBase();
+  const canFade = base !== null && seconds > 0 && !!useSpotify.getState().playback?.deviceId;
+  if (canFade) {
+    baseVolume = base;
+    await setVolumeQuiet(0);
+  }
+  await spotifyPlay(uri, opts);
+  if (canFade) {
+    await rampVolume(0, base!, seconds);
+    baseVolume = null;
+  }
+}
+
+/**
+ * Wechselt innerhalb von Spotify die Playlist: erst leiser, dann die neue
+ * Playlist starten und wieder lauter werden (Spotify spielt immer nur einen Titel).
+ */
+export async function spotifySwitch(uri: string | null, seconds: number, opts: { offsetUri?: string; positionMs?: number } = {}) {
+  const base = currentBase();
+  if (base === null || seconds <= 0 || !useSpotify.getState().playback?.isPlaying) {
+    await spotifyPlayFadeIn(uri, seconds, opts);
+    return;
+  }
+  baseVolume = base;
+  await rampVolume(base, 0, seconds / 2);
+  await spotifyPlay(uri, opts);
+  await rampVolume(0, base, seconds / 2);
+  baseVolume = null;
 }
 
 /** Spielt eine Playlist (oder setzt die Wiedergabe fort, wenn `uri` fehlt). */
