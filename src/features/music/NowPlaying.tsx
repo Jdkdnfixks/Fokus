@@ -2,7 +2,7 @@ import { Music2, Pause, Play, SkipForward, Waves } from "lucide-react";
 import { useNav } from "../../store/nav";
 import { ambientToggle, useAmbient } from "./ambient";
 import { currentLocalTrack, useLocalPlayer } from "./localPlayer";
-import { spotifyNext, spotifyPause, spotifyPlay, useSpotify } from "./spotify";
+import { spotifyNext, spotifyPause, spotifyPlayFadeIn, useSpotify } from "./spotify";
 
 /** Kleine Wiedergabe-Anzeige in der Seitenleiste */
 export function NowPlaying() {
@@ -38,7 +38,7 @@ export function NowPlaying() {
             className="icon-btn sm"
             onClick={() => {
               if (showLocal) local.toggle();
-              else void (spotify?.isPlaying ? spotifyPause() : spotifyPlay(null));
+              else void (spotify?.isPlaying ? spotifyPause() : spotifyPlayFadeIn(null, 0));
             }}
           >
             {(showLocal ? local.playing : spotify?.isPlaying) ? <Pause size={14} /> : <Play size={14} />}

@@ -20,7 +20,7 @@ Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musi
 | **Aufgaben** | Aufgaben pro Modul mit Schätzung in Pomodoros, Fälligkeitsdatum; direkt im Timer auswählen und abhaken |
 | **Klausurplaner** | Kapitel und Aufwand eintragen → Fokus verteilt die Lernblöcke auf die freien Zeiten im Kalender bis zur Klausur; die letzten Tage bleiben für Wiederholung frei |
 | **Kalender** | Tages-, Wochen- und Monatsansicht, Termine per Maus anlegen und verschieben, Serientermine (z. B. Vorlesungen), Import und Abo von iCal-Kalendern (.ics), „Jetzt lernen“ direkt aus einem Lernblock |
-| **Musik** | Eigene MP3s mit Playlists, **Spotify-Steuerung** (Playlists auswählen, Play/Pause, Gerät wählen); startet automatisch mit dem Timer, auf Wunsch mit eigener **Pausenmusik** |
+| **Musik** | Eigene MP3s mit Playlists, **Spotify-Steuerung** (Playlists auswählen, Play/Pause, Gerät wählen); startet automatisch mit dem Timer, auf Wunsch mit eigener **Pausenmusik**; alle Titel gleich laut und **ein Lautstärkeregler für MP3s und Spotify** |
 | **Geräusche** | Regen, Bach, Meer, Wind, Kaminfeuer, braunes/rosa/weißes Rauschen – frei mischbar, in der App erzeugt |
 | **Website-Blocker** | Sperrt ablenkende Seiten (YouTube, Instagram, …) während der Lernphasen in allen Browsern |
 | **Statistik** | Lerntage-Heatmap, Lernzeit pro Tag/Woche und Modul, Serien, Wochenziele, beste Tageszeit laut deinen Reflexionen, CSV-Export |
@@ -87,6 +87,13 @@ Sobald du MP3s hinzufügst, spielt Fokus sie automatisch in jeder Lernphase ab u
 Unter **Musik → Timer-Kopplung → In Pausen** wählst du, was in der Pause passiert: Lernmusik **pausieren**, **weiterlaufen** lassen oder eine eigene **Pausenmusik** (eigene Playlist oder Spotify-Playlist). Schnell geht es auch über **„Als Pausenmusik“** auf der Musikseite bzw. das Tassen-Symbol bei einer Spotify-Playlist. Nach der Pause setzt Fokus deine Lernmusik genau an der unterbrochenen Stelle fort.
 
 Der Wechsel ist fließend: In den letzten Sekunden einer Phase wird die bisherige Musik leiser, während die Musik der nächsten Phase schon lauter wird – wie der nahtlose Übergang bei Spotify. Die Dauer stellst du unter **Musik → Timer-Kopplung → Übergang** ein (Standard: 3 Sekunden, 0 = harter Wechsel).
+
+### Lautstärke
+Unter **Musik → Lautstärke**:
+- **Eigene Musik gleich laut abspielen**: Fokus misst jede Datei einmal im Hintergrund (Lautheit in LUFS, dasselbe Verfahren wie bei Spotify; ein 2-Stunden-Mix dauert etwa eine halbe Minute) und gleicht laute und leise Titel aus. Die Dateien bleiben unverändert.
+- **Spotify mit demselben Regler steuern**: Ein Regler für MP3s und Spotify – im Player, im Spotify-Tab und hier. Änderst du die Lautstärke direkt in Spotify, übernimmt Fokus sie.
+- **Lautstärkepegel in Spotify**: dasselbe wählen wie in den Spotify-Einstellungen („Lautstärkepegel“, Standard *Normal*; „Lautstärke normalisieren“ sollte an sein). Dann klingen MP3s und Spotify gleich laut.
+- **Feinabgleich**: Klingt Spotify trotzdem lauter oder leiser, hier nachjustieren. Mit **Umschalten** wechselst du zum Vergleich zwischen Spotify und deiner Musik hin und her.
 
 Fokus steuert die Spotify-App auf deinem PC. Ist Spotify nicht geöffnet, startet Fokus die App beim ersten Abspielen.
 

@@ -1,4 +1,5 @@
 import type { AppData, EventType, Settings, TimerPreset } from "./types";
+import { gainToSlider } from "../features/music/volume";
 
 /**
  * Gedeckte Modulfarben in fester Reihenfolge. Die Reihenfolge ist so gewählt,
@@ -74,7 +75,11 @@ export function defaultSettings(): Settings {
       ambientInBreak: false,
       ambientMix: { rain: 0.5 },
       ambientMaster: 0.7,
-      localVolume: 0.8,
+      volume: 0.8,
+      normalize: true,
+      linkVolume: true,
+      loudnessTarget: "normal",
+      spotifyOffsetDb: 0,
     },
     spotify: { clientId: "" },
     blocker: {
@@ -134,6 +139,13 @@ export function normalizeData(raw: unknown): AppData {
   const storedMusic = isPlain(raw.settings) && isPlain(raw.settings.music) ? (raw.settings.music as Plain) : null;
   if (storedMusic && storedMusic.breakSource === undefined && storedMusic.breakBehavior === "continue") {
     storedMusic.breakSource = "continue";
+  }
+  // ältere Versionen: localVolume (linear) → volume (logarithmischer Regler)
+  if (storedMusic && "localVolume" in storedMusic) {
+    if (storedMusic.volume === undefined && typeof storedMusic.localVolume === "number") {
+      storedMusic.volume = gainToSlider(storedMusic.localVolume);
+    }
+    delete storedMusic.localVolume;
   }
   return {
     schema: 1,

@@ -1,4 +1,5 @@
 mod blocker;
+mod loudness;
 mod net;
 mod spotify;
 mod storage;
@@ -183,6 +184,7 @@ pub fn run() {
             storage::lock_release,
             storage::music_import,
             storage::music_delete,
+            storage::music_loudness,
             storage::read_text_file,
             storage::write_text_file,
             timer::timer_sync,

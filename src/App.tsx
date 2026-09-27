@@ -22,6 +22,7 @@ import { ensureFocusMusicDefault } from "./features/music/focusMusic";
 import { NowPlaying } from "./features/music/NowPlaying";
 import { setMusicDir } from "./features/music/localPlayer";
 import { startSpotifyPolling } from "./features/music/spotify";
+import { startLoudnessScan } from "./features/music/loudnessScan";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { StatsPage } from "./features/stats/StatsPage";
 import { UpdateBanner } from "./features/update/UpdateBanner";
@@ -252,6 +253,7 @@ function useStartup() {
     if (status !== "ready") return;
     startTimerEngine();
     startSpotifyPolling();
+    startLoudnessScan();
     void refreshBlockerStatus();
     startUpdateChecks();
     if (ensureFocusMusicDefault()) {

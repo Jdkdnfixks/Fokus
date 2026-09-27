@@ -66,6 +66,7 @@ vi.stubGlobal("Audio", FakeAudio);
 
 const { useData } = await import("../../store/data");
 const { useLocalPlayer, setMusicDir } = await import("./localPlayer");
+const { gainToSlider } = await import("./volume");
 
 const TARGET = 0.8;
 
@@ -84,7 +85,10 @@ beforeEach(() => {
         { id: "t1", file: "lernen.mp3", title: "Lernmix", addedAt: "" },
         { id: "t2", file: "pause.mp3", title: "Pausenmix", addedAt: "" },
       ],
-      settings: { ...s.data.settings, music: { ...s.data.settings.music, localVolume: TARGET } },
+      settings: {
+        ...s.data.settings,
+        music: { ...s.data.settings.music, volume: gainToSlider(TARGET), normalize: true, loudnessTarget: "normal", linkVolume: true, spotifyOffsetDb: 0 },
+      },
     },
   }));
 });
@@ -158,5 +162,37 @@ describe("Überblendung im eigenen Player", () => {
     lern.emit("ended");
     expect(useLocalPlayer.getState().position).not.toBe(99);
     expect(useLocalPlayer.getState().queue).toEqual(["t2"]);
+  });
+});
+
+describe("Gleich laute Titel", () => {
+  it("spielt einen lauten Titel entsprechend leiser ab", async () => {
+    useData.getState().patch("tracks", "t1", { loudness: -8 }); // 6 dB lauter als Spotify-Normal
+    useLocalPlayer.getState().playQueue(["t1"], 0, "lern");
+    await vi.advanceTimersByTimeAsync(20);
+    expect(deck("lernen.mp3").volume).toBeCloseTo(TARGET * 10 ** (-6 / 20));
+  });
+
+  it("gleicht einen laufenden Titel sanft an, sobald seine Messung fertig ist", async () => {
+    useData.getState().patch("tracks", "t1", { loudness: undefined });
+    useLocalPlayer.getState().playQueue(["t1"], 0, "lern");
+    await vi.advanceTimersByTimeAsync(20);
+    const lern = deck("lernen.mp3");
+    expect(lern.volume).toBeCloseTo(TARGET);
+
+    useData.getState().patch("tracks", "t1", { loudness: -8 });
+    await vi.advanceTimersByTimeAsync(700);
+    expect(lern.volume).toBeLessThan(TARGET);
+    expect(lern.volume).toBeGreaterThan(TARGET * 0.5);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(lern.volume).toBeCloseTo(TARGET * 10 ** (-6 / 20));
+  });
+
+  it("der Regler wirkt sofort", async () => {
+    useLocalPlayer.getState().playQueue(["t2"], 0, "pause");
+    await vi.advanceTimersByTimeAsync(20);
+    const d = deck("pause.mp3");
+    useData.getState().setSettings((s) => ({ ...s, music: { ...s.music, volume: 0.5 } }));
+    expect(d.volume).toBeCloseTo(0.1); // 50 % ≙ −20 dB
   });
 });

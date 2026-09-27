@@ -583,6 +583,19 @@ pub fn music_delete(state: State<'_, StorageState>, file: String) -> Result<(), 
     Ok(())
 }
 
+/// Misst die Lautheit eines Titels im Musikordner (LUFS; `None`, wenn nicht messbar).
+#[tauri::command]
+pub async fn music_loudness(state: State<'_, StorageState>, file: String) -> Result<Option<f64>, String> {
+    let name = safe_file_name(&file)?.to_string();
+    let path = current_dir(&state)?.join(MUSIC_DIR).join(name);
+    if !path.is_file() {
+        return Err("Datei nicht gefunden".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || crate::loudness::measure(&path))
+        .await
+        .map_err(err)?
+}
+
 /// Hilfsfunktionen für Import/Export über Dateidialoge.
 #[tauri::command]
 pub async fn read_text_file(path: String) -> Result<String, String> {

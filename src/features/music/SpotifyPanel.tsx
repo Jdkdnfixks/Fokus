@@ -14,7 +14,7 @@ import {
   refreshPlayback,
   spotifyNext,
   spotifyPause,
-  spotifyPlay,
+  spotifyPlayFadeIn,
   spotifyPrev,
   spotifyShuffle,
   spotifyTransfer,
@@ -24,6 +24,8 @@ import {
 } from "./spotify";
 import { chooseSpotifyBreakMusic, chooseSpotifyFocusMusic } from "./focusMusic";
 import { fmtSeconds } from "./LocalMusic";
+import { sliderFromSpotifyPercent, spotifyPercentFor } from "./volume";
+import { setMusicVolume } from "./volumeControl";
 
 export function SpotifyPanel() {
   const connected = useSpotify((s) => s.connected);
@@ -136,7 +138,13 @@ function SpotifyConnected() {
     toast(`„${p.name}“ läuft ab jetzt in deinen Pausen.`, "success");
   };
 
+  const linkedVolume = spotifyPercentFor(music);
   const onVolume = (v: number) => {
+    if (linkedVolume !== null) {
+      // gemeinsamer Regler: eigene Musik zieht mit
+      setMusicVolume(sliderFromSpotifyPercent(v, music));
+      return;
+    }
     setVolume(v);
     if (volTimer.current) clearTimeout(volTimer.current);
     volTimer.current = setTimeout(() => void spotifyVolume(v), 250);
@@ -214,7 +222,7 @@ function SpotifyConnected() {
             </button>
             <button
               className="play-circle"
-              onClick={() => void (playback?.isPlaying ? spotifyPause() : spotifyPlay(null))}
+              onClick={() => void (playback?.isPlaying ? spotifyPause() : spotifyPlayFadeIn(null, 0))}
               title={playback?.isPlaying ? "Pause" : "Abspielen"}
             >
               {playback?.isPlaying ? <Pause size={18} /> : <Play size={18} style={{ marginLeft: 2 }} />}
@@ -228,7 +236,14 @@ function SpotifyConnected() {
           </div>
           <div className="row gap-8" style={{ width: 170 }}>
             <Volume2 size={14} className="faint" />
-            <Slider value={volume ?? playback?.volume ?? 50} min={0} max={100} step={1} onChange={onVolume} ariaLabel="Spotify-Lautstärke" />
+            <Slider
+              value={linkedVolume ?? volume ?? playback?.volume ?? 50}
+              min={0}
+              max={100}
+              step={1}
+              onChange={onVolume}
+              ariaLabel={linkedVolume !== null ? "Musiklautstärke (auch eigene Musik)" : "Spotify-Lautstärke"}
+            />
           </div>
         </div>
       </div>
@@ -250,7 +265,7 @@ function SpotifyConnected() {
                 {p.image ? <img src={p.image} alt="" loading="lazy" /> : null}
                 <button
                   className="play-circle overlay"
-                  onClick={() => void (isPlaying ? spotifyPause() : spotifyPlay(p.uri))}
+                  onClick={() => void (isPlaying ? spotifyPause() : spotifyPlayFadeIn(p.uri, 0))}
                   title={isPlaying ? "Pause" : "Abspielen"}
                 >
                   {isPlaying ? <Pause size={16} /> : <Play size={16} style={{ marginLeft: 2 }} />}

@@ -23,7 +23,8 @@ import { call, errorText, isTauri } from "../../lib/tauri";
 import { useData, useSettings } from "../../store/data";
 import type { ID, LocalTrack } from "../../store/types";
 import { chooseBreakSource, chooseFocusSource, chooseLocalBreakMusic, chooseLocalFocusMusic, ensureFocusMusicDefault } from "./focusMusic";
-import { applyLocalVolume, currentLocalTrack, playlistTrackIds, stopIfTrackRemoved, useLocalPlayer } from "./localPlayer";
+import { currentLocalTrack, playlistTrackIds, stopIfTrackRemoved, useLocalPlayer } from "./localPlayer";
+import { setMusicVolume } from "./volumeControl";
 
 interface ImportedTrack {
   id: string;
@@ -348,8 +349,7 @@ export function LocalMusic() {
 
 function LocalPlayerBar() {
   const player = useLocalPlayer();
-  const volume = useSettings().music.localVolume;
-  const setSettings = useData((s) => s.setSettings);
+  const { volume, linkVolume } = useSettings().music;
   const track = currentLocalTrack();
   if (!player.queue.length) return null;
 
@@ -393,14 +393,7 @@ function LocalPlayerBar() {
       <div className="row gap-8" style={{ justifyContent: "flex-end" }}>
         <Volume2 size={15} className="faint" />
         <div style={{ width: 110 }}>
-          <Slider
-            value={volume}
-            onChange={(v) => {
-              setSettings((s) => ({ ...s, music: { ...s.music, localVolume: v } }));
-              setTimeout(applyLocalVolume, 0);
-            }}
-            ariaLabel="Lautstärke"
-          />
+          <Slider value={volume} onChange={setMusicVolume} ariaLabel={linkVolume ? "Musiklautstärke (auch Spotify)" : "Lautstärke"} />
         </div>
       </div>
       {player.error && <span className="tiny" style={{ color: "var(--danger)", gridColumn: "1 / -1" }}>{player.error}</span>}

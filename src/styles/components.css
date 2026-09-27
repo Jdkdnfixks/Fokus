@@ -942,6 +942,8 @@ input[type="time"].input {
 }
 .stepper span {
   min-width: 34px;
+  padding: 0 2px;
+  white-space: nowrap;
   text-align: center;
   font-variant-numeric: tabular-nums;
   font-size: 13.5px;

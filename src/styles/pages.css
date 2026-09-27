@@ -876,3 +876,22 @@ rect.heat-cell:focus-visible {
   text-align: center;
   margin-top: -2px;
 }
+
+/* Musik → Lautstärke */
+.volume-main {
+  padding: 2px 0 14px;
+}
+.volume-main .slider {
+  flex: 1;
+}
+.volume-value {
+  min-width: 48px;
+  text-align: right;
+}
+.measure-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}

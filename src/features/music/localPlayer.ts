@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { isTauri } from "../../lib/tauri";
 import { useData } from "../../store/data";
 import type { ID, LocalTrack } from "../../store/types";
+import { localVolumeFor } from "./volume";
 
 export type Repeat = "off" | "all" | "one";
 
@@ -60,8 +61,9 @@ export function trackUrl(track: LocalTrack): string | null {
   return convertFileSrc(`${musicDir}${sep}${track.file}`);
 }
 
+/** Lautstärke für den aktuellen Titel: Regler + Pegelausgleich des Titels */
 function targetVolume() {
-  return Math.max(0, Math.min(1, useData.getState().data.settings.music.localVolume));
+  return localVolumeFor(currentLocalTrack(), useData.getState().data.settings.music);
 }
 
 function createAudio(): HTMLAudioElement {
@@ -332,10 +334,32 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
   },
 }));
 
-/** Lautstärke-Einstellung sofort anwenden */
-export function applyLocalVolume() {
-  if (audio && !ramps.has(audio)) audio.volume = targetVolume();
+/** Lautstärke-Einstellung anwenden – sofort oder weich über `seconds` */
+export function applyLocalVolume(seconds = 0) {
+  // während einer Überblendung nicht dazwischenfunken
+  if (!audio || ramps.has(audio)) return;
+  if (audio.paused) audio.volume = targetVolume();
+  else ramp(audio, targetVolume(), seconds);
 }
+
+// Regler, Angleichung oder frisch gemessener Titel → Lautstärke nachführen
+useData.subscribe((d, prev) => {
+  const m = d.data.settings.music;
+  const pm = prev.data.settings.music;
+  if (
+    m.volume !== pm.volume ||
+    m.normalize !== pm.normalize ||
+    m.loudnessTarget !== pm.loudnessTarget ||
+    m.spotifyOffsetDb !== pm.spotifyOffsetDb ||
+    m.linkVolume !== pm.linkVolume
+  ) {
+    applyLocalVolume();
+  } else if (d.data.tracks !== prev.data.tracks) {
+    const t = currentLocalTrack();
+    const before = t && prev.data.tracks.find((x) => x.id === t.id);
+    if (t && before && t.loudness !== before.loudness) applyLocalVolume(1.5);
+  }
+});
 
 /** Titel der Playlist (oder aller Titel), in Anzeigereihenfolge */
 export function playlistTrackIds(playlistId: ID | null): ID[] {

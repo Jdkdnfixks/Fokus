@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { call, errorText, isTauri, openExternal } from "../../lib/tauri";
 import { useData } from "../../store/data";
+import { sliderFromSpotifyPercent, spotifyPercentFor } from "./volume";
 
 /**
  * Spotify-Anbindung über die Web API. Fokus steuert die Spotify-App auf dem
@@ -361,6 +362,7 @@ export async function refreshPlayback() {
       },
       error: null,
     });
+    adoptExternalVolume();
   } catch (e) {
     setError(e);
   }
@@ -429,10 +431,25 @@ export async function spotifyRestore(snap: SpotifySnapshot, fade = 0) {
 
 /** Lautstärke vor einer Blende – danach wird sie wiederhergestellt */
 let baseVolume: number | null = null;
+/** laufende Blenden (dann nichts von außen übernehmen) */
+let fading = 0;
+/** zuletzt von Fokus gesetzte Lautstärke */
+let lastSet: { percent: number; at: number } | null = null;
+
+const musicSettings = () => useData.getState().data.settings.music;
+
+/** Spotify-Lautstärke laut gemeinsamem Regler (null, wenn Spotify eigenständig geregelt wird) */
+export function linkedSpotifyVolume(): number | null {
+  return spotifyPercentFor(musicSettings());
+}
 
 async function setVolumeQuiet(percent: number) {
+  const p = Math.max(0, Math.min(100, Math.round(percent)));
+  lastSet = { percent: p, at: Date.now() };
   try {
-    await api(`/me/player/volume?volume_percent=${Math.max(0, Math.min(100, Math.round(percent)))}`, { method: "PUT" });
+    await api(`/me/player/volume?volume_percent=${p}`, { method: "PUT" });
+    const pb = useSpotify.getState().playback;
+    if (pb) useSpotify.setState({ playback: { ...pb, volume: p } });
   } catch {
     /* manche Geräte erlauben keine Lautstärkeregelung */
   }
@@ -440,16 +457,57 @@ async function setVolumeQuiet(percent: number) {
 
 function currentBase(): number | null {
   if (baseVolume !== null) return baseVolume;
+  const linked = linkedSpotifyVolume();
+  if (linked !== null) return linked;
   const v = useSpotify.getState().playback?.volume;
   return typeof v === "number" ? v : null;
 }
 
 async function rampVolume(from: number, to: number, seconds: number) {
   const steps = Math.max(2, Math.round(seconds * 2));
-  for (let i = 1; i <= steps; i++) {
-    await sleep((seconds * 1000) / steps);
-    await setVolumeQuiet(from + ((to - from) * i) / steps);
+  fading++;
+  try {
+    for (let i = 1; i <= steps; i++) {
+      await sleep((seconds * 1000) / steps);
+      await setVolumeQuiet(from + ((to - from) * i) / steps);
+    }
+  } finally {
+    fading--;
   }
+}
+
+let applyTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Gemeinsamen Regler auf Spotify übertragen (verzögert, damit Ziehen am Regler nicht jedes Mal sendet). */
+export function applyLinkedSpotifyVolume(delayMs = 250) {
+  if (applyTimer) clearTimeout(applyTimer);
+  applyTimer = setTimeout(() => {
+    applyTimer = null;
+    const target = linkedSpotifyVolume();
+    const pb = useSpotify.getState().playback;
+    if (target === null || !pb?.deviceId || fading > 0 || baseVolume !== null) return;
+    if (pb.volume === target) return;
+    void setVolumeQuiet(target);
+  }, delayMs);
+}
+
+/**
+ * Wurde die Lautstärke direkt in Spotify geändert, übernimmt Fokus sie für den
+ * gemeinsamen Regler – so bleibt eigene Musik gleich laut wie Spotify.
+ * Nur bei laufender Wiedergabe auf einem Computer, nie während einer Blende.
+ */
+function adoptExternalVolume() {
+  const m = musicSettings();
+  const target = spotifyPercentFor(m);
+  const pb = useSpotify.getState().playback;
+  if (target === null || !pb?.isPlaying || typeof pb.volume !== "number") return;
+  if (fading > 0 || baseVolume !== null || applyTimer) return;
+  if (lastSet && Date.now() - lastSet.at < 5000) return;
+  const device = useSpotify.getState().devices.find((d) => d.id === pb.deviceId);
+  if (!device || device.type.toLowerCase() !== "computer") return;
+  if (Math.abs(pb.volume - target) < 2) return;
+  const volume = sliderFromSpotifyPercent(pb.volume, m);
+  useData.getState().setSettings((s) => ({ ...s, music: { ...s.music, volume } }));
 }
 
 /** Leiser werden, anhalten und die ursprüngliche Lautstärke wiederherstellen. */
@@ -467,18 +525,32 @@ export async function spotifyFadeOutAndPause(seconds: number) {
   }
 }
 
-/** Abspielen und dabei langsam lauter werden. */
+/**
+ * Abspielen und dabei langsam lauter werden. Mit `seconds` = 0 wird ohne Blende
+ * gestartet – folgt Spotify dem gemeinsamen Regler, dann gleich mit dieser Lautstärke.
+ */
 export async function spotifyPlayFadeIn(uri: string | null, seconds: number, opts: { offsetUri?: string; positionMs?: number } = {}) {
   const base = currentBase();
-  const canFade = base !== null && seconds > 0 && !!useSpotify.getState().playback?.deviceId;
-  if (canFade) {
-    baseVolume = base;
-    await setVolumeQuiet(0);
-  }
-  await spotifyPlay(uri, opts);
-  if (canFade) {
-    await rampVolume(0, base!, seconds);
-    baseVolume = null;
+  const known = !!useSpotify.getState().playback?.deviceId;
+  const canFade = base !== null && seconds > 0 && known;
+  const linked = linkedSpotifyVolume();
+  fading++;
+  try {
+    if (canFade) {
+      baseVolume = base;
+      await setVolumeQuiet(0);
+    } else if (linked !== null && known) {
+      await setVolumeQuiet(linked);
+    }
+    await spotifyPlay(uri, opts);
+    if (canFade) {
+      await rampVolume(0, base!, seconds);
+    } else if (linked !== null && useSpotify.getState().playback?.volume !== linked) {
+      await setVolumeQuiet(linked);
+    }
+  } finally {
+    if (canFade) baseVolume = null;
+    fading--;
   }
 }
 

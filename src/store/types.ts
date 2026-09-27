@@ -123,6 +123,8 @@ export interface LocalTrack {
   artist?: string;
   album?: string;
   duration?: number;
+  /** gemessene Lautheit in LUFS (null = nicht messbar, fehlt = noch nicht gemessen) */
+  loudness?: number | null;
   addedAt: string;
 }
 
@@ -192,7 +194,16 @@ export interface Settings {
     ambientInBreak: boolean;
     ambientMix: Partial<Record<AmbientId, number>>;
     ambientMaster: number;
-    localVolume: number;
+    /** Musiklautstärke 0–1 (logarithmisch wie bei Spotify) */
+    volume: number;
+    /** eigene Titel auf denselben Pegel bringen */
+    normalize: boolean;
+    /** Spotify folgt demselben Lautstärkeregler */
+    linkVolume: boolean;
+    /** in Spotify eingestellter Lautstärkepegel (Normalisierung) */
+    loudnessTarget: "quiet" | "normal" | "loud";
+    /** Feinabgleich: + = Spotify lauter als eigene Musik, − = leiser (dB) */
+    spotifyOffsetDb: number;
   };
   spotify: {
     clientId: string;

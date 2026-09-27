@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Music2, SlidersHorizontal, Waves } from "lucide-react";
+import { Music2, SlidersHorizontal, Volume2, Waves } from "lucide-react";
 import { useNav } from "../../store/nav";
 import { AmbientPanel } from "./AmbientPanel";
 import { CouplingPanel } from "./CouplingPanel";
 import { LocalMusic } from "./LocalMusic";
 import { SpotifyPanel } from "./SpotifyPanel";
+import { VolumePanel } from "./VolumePanel";
 
-type Tab = "local" | "spotify" | "ambient" | "coupling";
+type Tab = "local" | "spotify" | "ambient" | "volume" | "coupling";
 
 function SpotifyIcon({ size = 16 }: { size?: number }) {
   return (
@@ -43,6 +44,9 @@ export function MusicPage() {
         <button className={tab === "ambient" ? "active" : ""} onClick={() => setTab("ambient")}>
           <Waves size={15} /> Geräusche
         </button>
+        <button className={tab === "volume" ? "active" : ""} onClick={() => setTab("volume")}>
+          <Volume2 size={15} /> Lautstärke
+        </button>
         <button className={tab === "coupling" ? "active" : ""} onClick={() => setTab("coupling")}>
           <SlidersHorizontal size={15} /> Timer-Kopplung
         </button>
@@ -50,6 +54,7 @@ export function MusicPage() {
       {tab === "local" && <LocalMusic />}
       {tab === "spotify" && <SpotifyPanel />}
       {tab === "ambient" && <AmbientPanel />}
+      {tab === "volume" && <VolumePanel />}
       {tab === "coupling" && <CouplingPanel />}
     </div>
   );
