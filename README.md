@@ -33,6 +33,14 @@ Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musi
 2. Datei ausführen. Administratorrechte sind nicht nötig.
 3. Windows zeigt eventuell *„Der Computer wurde durch Windows geschützt“*, weil die App nicht kostenpflichtig signiert ist. Klicke auf **Weitere Informationen → Trotzdem ausführen**.
 
+### Falls Windows Defender Fokus meldet
+Fokus ist nicht mit einem gekauften Zertifikat signiert. Neue, unsignierte Programme werden von Windows Defender manchmal fälschlich als Bedrohung eingestuft (z. B. „Trojan:Win32/Wacatac…!ml“ – das „!ml“ steht für eine Einschätzung per maschinellem Lernen).
+1. **Windows-Sicherheit → Viren- & Bedrohungsschutz → Schutzverlauf** öffnen und nachsehen, *welche Datei* mit *welchem Namen* erkannt wurde.
+2. Betrifft es `Fokus.exe` bzw. das Fokus-Setup aus diesem Repository, die Datei als Fehlalarm an Microsoft melden: [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/en-us/wdsi/filesubmission) → „Incorrectly detected as malware“.
+3. Danach im Schutzverlauf **Aktionen → Zulassen** wählen bzw. Fokus neu installieren.
+
+Deine Daten liegen im Datenordner (z. B. OneDrive) und bleiben dabei erhalten.
+
 ## Updates
 
 Fokus aktualisiert sich selbst: Beim Start (und danach alle paar Stunden) prüft die App, ob es eine neue Version gibt. Dann erscheint oben der Hinweis **„Neue Version … ist verfügbar“** – ein Klick auf „Jetzt aktualisieren“ lädt das Update, installiert es und startet Fokus neu. Deine Daten bleiben erhalten, weil sie getrennt vom Programm im Datenordner liegen. Manuell suchen: **Einstellungen → System → Nach Updates suchen**.

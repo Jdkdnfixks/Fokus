@@ -4,6 +4,8 @@ mod net;
 mod spotify;
 mod storage;
 mod timer;
+#[cfg(windows)]
+mod win;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;

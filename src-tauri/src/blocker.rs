@@ -105,7 +105,7 @@ fn flush_dns() {
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let _ = std::process::Command::new("ipconfig")
+        let _ = std::process::Command::new(crate::win::system32("ipconfig.exe"))
             .arg("/flushdns")
             .creation_flags(CREATE_NO_WINDOW)
             .status();
@@ -194,70 +194,12 @@ pub fn clear_silently() {
     let _ = clear_block();
 }
 
-#[cfg(windows)]
-fn current_user_sid() -> Result<String, String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let out = std::process::Command::new("whoami")
-        .args(["/user", "/fo", "csv", "/nh"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| e.to_string())?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    // Ausgabe: "RECHNER\name","S-1-5-21-…"
-    text.split(',')
-        .map(|s| s.trim().trim_matches('"').to_string())
-        .find(|s| s.starts_with("S-1-"))
-        .filter(|s| s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
-        .ok_or_else(|| "Benutzerkennung (SID) konnte nicht ermittelt werden.".to_string())
-}
-
-/// Base64 für PowerShells `-EncodedCommand` (UTF-16LE), damit keine
-/// Anführungszeichen maskiert werden müssen.
-#[cfg_attr(not(windows), allow(dead_code))]
-fn encode_powershell(script: &str) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let bytes: Vec<u8> = script.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
-        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(TABLE[((n >> (18 - 6 * i)) & 63) as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
-}
-
+/// Führt `icacls` mit Adminrechten aus (Windows fragt einmal nach).
 #[cfg(windows)]
 fn run_elevated_icacls(args: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let args = args.replace('\'', "''");
-    let script = format!(
-        "try {{ $p = Start-Process -FilePath 'icacls.exe' -ArgumentList '{args}' -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode }} catch {{ exit 1223 }}"
-    );
-    let status = std::process::Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-WindowStyle",
-            "Hidden",
-            "-EncodedCommand",
-            &encode_powershell(&script),
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status()
-        .map_err(|e| e.to_string())?;
-    match status.code() {
-        Some(0) => Ok(()),
-        Some(1223) => Err("Die Windows-Abfrage wurde abgebrochen.".into()),
-        Some(code) => Err(format!("icacls ist mit Code {code} fehlgeschlagen.")),
-        None => Err("icacls wurde unerwartet beendet.".into()),
+    match crate::win::run_elevated(&crate::win::system32("icacls.exe"), args)? {
+        0 => Ok(()),
+        code => Err(format!("icacls ist mit Code {code} fehlgeschlagen.")),
     }
 }
 
@@ -267,7 +209,7 @@ pub async fn blocker_setup() -> Result<bool, String> {
     #[cfg(windows)]
     {
         tauri::async_runtime::spawn_blocking(|| {
-            let sid = current_user_sid()?;
+            let sid = crate::win::current_user_sid()?;
             let path = hosts_path().to_string_lossy().to_string();
             run_elevated_icacls(&format!("\"{path}\" /grant *{sid}:(M)"))?;
             Ok(is_writable())
@@ -288,7 +230,7 @@ pub async fn blocker_teardown() -> Result<bool, String> {
     #[cfg(windows)]
     {
         tauri::async_runtime::spawn_blocking(|| {
-            let sid = current_user_sid()?;
+            let sid = crate::win::current_user_sid()?;
             let path = hosts_path().to_string_lossy().to_string();
             run_elevated_icacls(&format!("\"{path}\" /remove:g *{sid}"))?;
             Ok(!is_writable())
@@ -313,13 +255,6 @@ mod tests {
         assert_eq!(normalize_domain("evil\n127.0.0.1 bank.de"), None);
         assert_eq!(normalize_domain("localhost"), None);
         assert_eq!(normalize_domain("-bad.com"), None);
-    }
-
-    #[test]
-    fn encodes_powershell_commands() {
-        // "ab" in UTF-16LE = 61 00 62 00 → YQBiAA==
-        assert_eq!(encode_powershell("ab"), "YQBiAA==");
-        assert_eq!(encode_powershell("exit 0"), "ZQB4AGkAdAAgADAA");
     }
 
     #[test]
