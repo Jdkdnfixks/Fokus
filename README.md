@@ -37,7 +37,7 @@ Eine ruhige Lern-App für Windows: Pomodoro-Timer, Wochenplanung, Aufgaben, Musi
 Fokus ist nicht mit einem gekauften Zertifikat signiert. Neue, unsignierte Programme werden von Windows Defender manchmal fälschlich als Bedrohung eingestuft (z. B. „Trojan:Win32/Wacatac…!ml“ – das „!ml“ steht für eine Einschätzung per maschinellem Lernen).
 1. **Windows-Sicherheit → Viren- & Bedrohungsschutz → Schutzverlauf** öffnen und nachsehen, *welche Datei* mit *welchem Namen* erkannt wurde.
 2. Betrifft es `Fokus.exe` bzw. das Fokus-Setup aus diesem Repository, die Datei als Fehlalarm an Microsoft melden: [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/en-us/wdsi/filesubmission) → „Incorrectly detected as malware“.
-3. Danach im Schutzverlauf **Aktionen → Zulassen** wählen bzw. Fokus neu installieren.
+3. Fokus neu installieren und – bis Microsoft den Fehlalarm bestätigt hat – nur den Programmordner ausnehmen: **Windows-Sicherheit → Viren- & Bedrohungsschutz → Einstellungen verwalten → Ausschlüsse → Ausschluss hinzufügen → Ordner** → `%LOCALAPPDATA%\Fokus`. Nicht die Bedrohung selbst „zulassen“: Das würde den Erkennungsnamen auf dem ganzen PC freigeben, auch für echte Schadsoftware.
 
 Deine Daten liegen im Datenordner (z. B. OneDrive) und bleiben dabei erhalten.
 

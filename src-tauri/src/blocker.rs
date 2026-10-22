@@ -102,14 +102,7 @@ fn strip_block(content: &str) -> (String, Vec<String>) {
 
 fn flush_dns() {
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let _ = std::process::Command::new(crate::win::system32("ipconfig.exe"))
-            .arg("/flushdns")
-            .creation_flags(CREATE_NO_WINDOW)
-            .status();
-    }
+    crate::win::flush_dns_cache();
 }
 
 fn write_hosts(content: &str) -> Result<(), String> {
@@ -147,27 +140,34 @@ fn apply_domains(domains: Vec<String>) -> Result<Vec<String>, String> {
     clean.sort();
     clean.dedup();
     let content = fs::read_to_string(hosts_path()).map_err(|e| e.to_string())?;
-    let (rest, _) = strip_block(&content);
-    if clean.is_empty() {
-        write_hosts(&rest)?;
+    let next = hosts_with_block(&content, &clean);
+    // nur schreiben, wenn sich wirklich etwas ändert
+    if next != content {
+        write_hosts(&next)?;
         flush_dns();
-        return Ok(clean);
     }
-    let nl = newline(&content);
+    Ok(clean)
+}
+
+/// hosts-Inhalt mit (neuem) Fokus-Block für `domains` – ohne Block, wenn die Liste leer ist.
+fn hosts_with_block(content: &str, domains: &[String]) -> String {
+    let (rest, _) = strip_block(content);
+    if domains.is_empty() {
+        return rest;
+    }
+    let nl = newline(content);
     let mut block = String::new();
     block.push_str(nl);
     block.push_str(BEGIN);
     block.push_str(nl);
-    for d in &clean {
+    for d in domains {
         for host in [d.clone(), format!("www.{d}")] {
             block.push_str(&format!("0.0.0.0 {host}{nl}:: {host}{nl}"));
         }
     }
     block.push_str(END);
     block.push_str(nl);
-    write_hosts(&(rest + &block))?;
-    flush_dns();
-    Ok(clean)
+    rest + &block
 }
 
 /// Entfernt die Sperre. Wird auch beim Beenden und beim Start aufgerufen,
@@ -265,5 +265,19 @@ mod tests {
         let (rest, blocked) = strip_block(&content);
         assert_eq!(rest, "127.0.0.1 localhost\r\n");
         assert_eq!(blocked, vec!["youtube.com".to_string()]);
+    }
+
+    #[test]
+    fn same_domains_leave_hosts_unchanged() {
+        // wiederholtes Sperren mit denselben Seiten darf die Datei nicht erneut schreiben
+        let original = "127.0.0.1 localhost\r\n".to_string();
+        let domains = vec!["reddit.com".to_string(), "youtube.com".to_string()];
+        let once = hosts_with_block(&original, &domains);
+        assert_ne!(once, original);
+        assert_eq!(hosts_with_block(&once, &domains), once);
+        assert_eq!(strip_block(&once).1, domains);
+        // Freigeben stellt den Ausgangszustand wieder her
+        assert_eq!(hosts_with_block(&once, &[]), original);
+        assert_eq!(hosts_with_block(&original, &[]), original);
     }
 }

@@ -97,3 +97,17 @@ pub fn run_elevated(program: &str, args: &str) -> Result<u32, String> {
         Ok(code)
     }
 }
+
+#[link(name = "dnsapi", kind = "raw-dylib")]
+extern "system" {
+    /// Leert den DNS-Zwischenspeicher von Windows (dasselbe wie `ipconfig /flushdns`).
+    fn DnsFlushResolverCache() -> i32;
+}
+
+/// Leert den DNS-Zwischenspeicher, damit Änderungen an der hosts-Datei sofort
+/// greifen – direkt über die Windows-API, ohne ein verstecktes Konsolenprogramm.
+pub fn flush_dns_cache() {
+    unsafe {
+        DnsFlushResolverCache();
+    }
+}
