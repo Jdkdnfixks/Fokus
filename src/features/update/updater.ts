@@ -88,6 +88,8 @@ export async function installUpdate() {
   await call("blocker_clear").catch(() => {});
   await call("lock_release").catch(() => {});
 
+  // Fokus wird gleich vom Installer beendet – das ist kein Absturz
+  await call("diag_expect_exit").catch(() => {});
   useUpdate.setState({ status: "downloading", progress: 0, error: null });
   let total = 0;
   let done = 0;

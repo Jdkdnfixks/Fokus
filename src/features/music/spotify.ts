@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { call, errorText, isTauri, openExternal } from "../../lib/tauri";
+import { diag } from "../../lib/diag";
 import { useData } from "../../store/data";
 import { sliderFromSpotifyPercent, spotifyPercentFor } from "./volume";
 
@@ -573,6 +574,7 @@ export async function spotifySwitch(uri: string | null, seconds: number, opts: {
 
 /** Spielt eine Playlist (oder setzt die Wiedergabe fort, wenn `uri` fehlt). */
 export async function spotifyPlay(uri?: string | null, opts: { offsetUri?: string; positionMs?: number } = {}) {
+  diag("Spotify: Wiedergabe startet");
   try {
     useSpotify.setState({ error: null });
     const device = await pickDevice();

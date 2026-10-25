@@ -1,4 +1,5 @@
 mod blocker;
+mod diag;
 mod loudness;
 mod net;
 mod spotify;
@@ -45,6 +46,7 @@ fn do_quit(app: &AppHandle) {
     app.state::<AppFlags>().quitting.store(true, Ordering::SeqCst);
     blocker::clear_silently();
     storage::release_lock(app);
+    diag::clean_exit();
     app.exit(0);
 }
 
@@ -139,6 +141,9 @@ pub fn run() {
         .manage(timer::TimerState::default())
         .setup(|app| {
             let handle = app.handle().clone();
+            if let Ok(dir) = handle.path().app_local_data_dir() {
+                diag::init(&dir, &handle.package_info().version.to_string());
+            }
             app.manage(storage::init(&handle));
             // Falls die App zuvor abgestürzt ist, keine Seiten gesperrt lassen.
             blocker::clear_silently();
@@ -187,6 +192,9 @@ pub fn run() {
             storage::music_import,
             storage::music_delete,
             storage::music_loudness,
+            diag::diag_previous,
+            diag::diag_event,
+            diag::diag_expect_exit,
             storage::read_text_file,
             storage::write_text_file,
             timer::timer_sync,
@@ -206,6 +214,7 @@ pub fn run() {
         if let RunEvent::Exit = event {
             blocker::clear_silently();
             storage::release_lock(handle);
+            diag::clean_exit();
         }
     });
 }

@@ -143,8 +143,11 @@ fn apply_domains(domains: Vec<String>) -> Result<Vec<String>, String> {
     let next = hosts_with_block(&content, &clean);
     // nur schreiben, wenn sich wirklich etwas ändert
     if next != content {
+        crate::diag::event(format!("Website-Blocker: hosts-Datei wird geschrieben ({} Seiten)", clean.len()));
         write_hosts(&next)?;
+        crate::diag::event("Website-Blocker: hosts-Datei geschrieben");
         flush_dns();
+        crate::diag::event("Website-Blocker: DNS-Zwischenspeicher geleert");
     }
     Ok(clean)
 }
@@ -185,8 +188,10 @@ fn clear_block() -> Result<(), String> {
         return Ok(());
     }
     let (rest, _) = strip_block(&content);
+    crate::diag::event("Website-Blocker: Sperre wird aufgehoben");
     write_hosts(&rest)?;
     flush_dns();
+    crate::diag::event("Website-Blocker: Sperre aufgehoben");
     Ok(())
 }
 

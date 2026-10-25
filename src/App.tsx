@@ -43,6 +43,7 @@ import { useNav, type Page } from "./store/nav";
 import type { StorageInfo } from "./store/persistence";
 import { refreshBlockerStatus } from "./features/blocker/blocker";
 import { autoSyncFeeds } from "./features/calendar/ImportDialog";
+import { checkPreviousCrash } from "./features/diag/crashNotice";
 
 const NAV: { page: Page; label: string; icon: typeof Timer }[] = [
   { page: "timer", label: "Fokus", icon: Timer },
@@ -260,6 +261,7 @@ function useStartup() {
       toast("Deine eigene Musik startet ab jetzt automatisch mit dem Timer. Ändern kannst du das unter Musik → Timer-Kopplung.", "success", 8000);
     }
     void autoSyncFeeds();
+    void checkPreviousCrash();
   }, [status]);
 
   useEffect(() => {

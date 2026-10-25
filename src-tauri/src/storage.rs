@@ -590,13 +590,18 @@ pub async fn music_loudness(
     file: String,
 ) -> Result<Option<crate::loudness::Measurement>, String> {
     let name = safe_file_name(&file)?.to_string();
-    let path = current_dir(&state)?.join(MUSIC_DIR).join(name);
+    let path = current_dir(&state)?.join(MUSIC_DIR).join(&name);
     if !path.is_file() {
         return Err("Datei nicht gefunden".into());
     }
-    tauri::async_runtime::spawn_blocking(move || crate::loudness::measure(&path))
-        .await
-        .map_err(err)?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::diag::event(format!("Lautstärke messen: {name}"));
+        let result = crate::loudness::measure(&path);
+        crate::diag::event(format!("Lautstärke gemessen: {name}"));
+        result
+    })
+    .await
+    .map_err(err)?
 }
 
 /// Hilfsfunktionen für Import/Export über Dateidialoge.

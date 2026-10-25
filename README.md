@@ -121,6 +121,8 @@ Technisch trägt Fokus die Seiten während der Lernphase in die Windows-*hosts*-
 
 Alles bleibt lokal bzw. in deinem eigenen Cloud-Ordner. Fokus hat keinen Server und sammelt keine Daten. Nur für Spotify und abonnierte Kalender werden die jeweiligen Dienste direkt angesprochen; die Spotify-Zugangsdaten bleiben auf dem jeweiligen Gerät.
 
+Für die Absturz-Erkennung merkt sich Fokus die letzten Aktionen (z. B. „Timer gestartet“, „Website-Blocker aktiv“) in `%LOCALAPPDATA%\de.fokus.lernapp\diagnose.json`. Endet Fokus unerwartet, zeigt es beim nächsten Start, was zuletzt passiert ist. Die Datei verlässt deinen PC nicht.
+
 ## Entwicklung
 
 Voraussetzungen: [Node.js 22](https://nodejs.org), [Rust](https://rustup.rs) und unter Windows die „C++ Build Tools“ aus Visual Studio (siehe [Tauri-Voraussetzungen](https://v2.tauri.app/start/prerequisites/)).

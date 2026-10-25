@@ -61,15 +61,16 @@ interface ConfirmRequest {
   title: string;
   message?: ReactNode;
   choices: ConfirmChoice[];
+  cancelLabel: string;
   resolve: (v: string | null) => void;
 }
 
 const useConfirmStore = create<{ req: ConfirmRequest | null }>(() => ({ req: null }));
 
 /** Zeigt eine Rückfrage mit frei wählbaren Antworten. Liefert den gewählten Wert oder null. */
-export function ask(title: string, message: ReactNode, choices: ConfirmChoice[]): Promise<string | null> {
+export function ask(title: string, message: ReactNode, choices: ConfirmChoice[], cancelLabel = "Abbrechen"): Promise<string | null> {
   return new Promise((resolve) => {
-    useConfirmStore.setState({ req: { title, message, choices, resolve } });
+    useConfirmStore.setState({ req: { title, message, choices, cancelLabel, resolve } });
   });
 }
 
@@ -92,7 +93,7 @@ export function ConfirmHost() {
       footer={
         <>
           <button className="btn ghost" onClick={() => close(null)}>
-            Abbrechen
+            {req.cancelLabel}
           </button>
           {req.choices.map((c) => (
             <button

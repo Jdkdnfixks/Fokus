@@ -65,7 +65,20 @@ pub fn timer_sync(
     };
     let running = display.running;
     let ends_at = display.ends_at_ms;
-    *state.display.lock().map_err(|e| e.to_string())? = display;
+    {
+        let mut current = state.display.lock().map_err(|e| e.to_string())?;
+        if current.label != display.label || current.running != display.running || current.active != display.active {
+            let what = if !display.active {
+                "aus".to_string()
+            } else if display.running {
+                format!("{} läuft (noch {})", display.label, fmt_ms(display.ends_at_ms - now_ms()))
+            } else {
+                format!("{} pausiert", display.label)
+            };
+            crate::diag::event(format!("Timer: {what}"));
+        }
+        *current = display;
+    }
     render(&app);
 
     if running {
@@ -147,9 +160,14 @@ fn render(app: &AppHandle) {
 pub fn spawn_render_loop(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
+        let mut ticks: u32 = 0;
         loop {
             interval.tick().await;
             render(&app);
+            ticks = ticks.wrapping_add(1);
+            if ticks % 10 == 0 {
+                crate::diag::heartbeat();
+            }
         }
     });
 }

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { audioContext } from "../../lib/audio";
+import { diag } from "../../lib/diag";
 import { isTauri } from "../../lib/tauri";
 import { useData } from "../../store/data";
 import type { ID, LocalTrack } from "../../store/types";
@@ -371,6 +372,7 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
 
   playQueue(trackIds, startIndex = 0, playlistId = null, fade = 0) {
     if (!trackIds.length) return;
+    diag(`Eigene Musik: Wiedergabe startet (${webAudioOk ? "mit Verstärker" : "ohne Verstärker"})`);
     const first = trackIds[startIndex];
     const queue = get().shuffle ? shuffled(trackIds, first) : trackIds;
     set({ queue, playlistId, index: 0 });
@@ -453,6 +455,7 @@ export const useLocalPlayer = create<LocalPlayerState>()((set, get) => ({
 
   restore(snap, fade = 0) {
     if (!snap.queue.length) return;
+    diag("Eigene Musik: Lernmusik wird fortgesetzt");
     set({ queue: snap.queue, playlistId: snap.playlistId });
     crossfadeTo(Math.min(snap.index, snap.queue.length - 1), fade, snap.position);
   },
